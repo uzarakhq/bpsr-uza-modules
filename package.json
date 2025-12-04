@@ -1,0 +1,52 @@
+{
+  "name": "bpsr-uza-modules",
+  "version": "1.0.0",
+  "description": "BPSR Uza Modules - Game module optimization tool",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "rebuild": "electron-rebuild",
+    "postinstall": "electron-rebuild",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "author": "Uzarak",
+  "license": "MIT",
+  "dependencies": {
+    "@mongodb-js/zstd": "^1.2.2",
+    "cap": "^0.2.1",
+    "protobufjs": "^7.2.6",
+    "zstd-codec": "^0.1.5"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.uzarak.bpsr-uza-modules",
+    "productName": "BPSR Uza Modules",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "ui/**/*",
+      "*.json",
+      "*.ico",
+      "*.png",
+      "*.webp",
+      "Icons/**/*",
+      "Module-Effects/**/*",
+      "Modulos/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable.exe"
+    }
+  }
+}

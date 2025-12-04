@@ -1,0 +1,8 @@
+# Ignorar archivos generados por protobuf
+BlueProtobuf_pb2.py linguist-generated
+
+# Ignorar archivos de imagen
+*.webp linguist-generated
+
+# Ignorar archivos de registro
+logs/ linguist-generated

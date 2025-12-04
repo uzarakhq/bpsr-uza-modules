@@ -1,0 +1,45 @@
+{
+"Correccion de algunas traducciones":{
+    "雷影剑士": "Stormblade",
+    "冰魔导师": "Frost Mage",
+    "涤罪恶火·战斧": "Heavy Guardian",
+    "青岚骑士": "Wind Knight",
+    "森语者": "Verdant Oracle",
+    "巨刃守护者": "Heavy Guardian",
+    "神射手": "Marksman",
+    "神盾骑士": "Shield Knight",
+    "灵魂乐手": "Beat Performer"
+},
+
+
+"Correccion de algunas traducciones en modulos":{
+    
+    "特攻治疗加持": "Healing Boost",
+    "专精治疗加持": "Healing Enhance",
+    "施法专注": "Cast Focus",
+    "暴击专注": "Crit Focus",
+    "极・生命凝聚": "Life Condense",
+    "极・急救措施": "First Aid",
+    "极・全队幸暴": "Team Luck & Crit",
+    "力量加持": "Strength Boost",
+    "敏捷加持": "Agility Boost",
+    "智力加持": "Intellect Boost",
+    "特攻伤害加持": "Special Attack",
+    "精英打击": "Elite Strike",
+    "抵御魔法 ": "Resistance",
+    "抵御物理": "Armor",
+    "攻速专注": "Attack SPD",
+    "幸运专注": "Luck Focus",
+    "极・伤害叠加": "DMG Stack",
+    "极・灵活身法": "Agile",
+    "极·绝境守护": "Final Protection",
+    "极・生命波动": "Life Wave",
+    "极・生命吸取": "Life Steal",
+    "": "Attack",
+    "": "Support",
+    "": "Guard",
+    "": "Rare",
+    "": "Epic",
+    "": "Legendary"
+}
+}

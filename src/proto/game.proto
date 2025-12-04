@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+// Module Part (attribute on a module)
+message ModPart {
+  int32 id = 1;
+  int32 value = 2;
+}
+
+// Module New Attribute
+message ModNewAttr {
+  repeated int32 ModParts = 1;
+}
+
+// Module Info Details
+message ModInfo {
+  repeated int32 InitLinkNums = 1;
+}
+
+// Item in package
+message Item {
+  int32 ConfigId = 1;
+  int64 Uuid = 2;
+  int32 Quality = 3;
+  ModNewAttr ModNewAttr = 4;
+}
+
+// Item Package
+message Package {
+  map<string, Item> Items = 1;
+}
+
+// Item Package Container
+message ItemPackage {
+  map<int32, Package> Packages = 1;
+}
+
+// Mod Container
+message Mod {
+  map<string, ModInfo> ModInfos = 1;
+}
+
+// Main character serialize data
+message CharSerialize {
+  ItemPackage ItemPackage = 1;
+  Mod Mod = 2;
+}
+
+// SyncContainerData message
+message SyncContainerData {
+  bytes vData = 1;
+}
+

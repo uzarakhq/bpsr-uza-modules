@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+// Module new attribute containing part IDs
+message ModNewAttr {
+  repeated int32 ModParts = 1;
+}
+
+// Item in a package
+message Item {
+  int64 Uuid = 1;
+  int32 ConfigId = 2;
+  int64 Count = 3;
+  int32 Invalid = 4;
+  int32 BindFlag = 5;
+  int64 CreateTime = 6;
+  int64 ExpireTime = 7;
+  int32 OptSrc = 8;
+  int32 Quality = 9;
+  bytes EquipAttr = 10;
+  bytes ModAttr = 11;
+  int64 CoolDownExpireTime = 12;
+  ModNewAttr ModNewAttr = 13;
+}
+
+// Package containing items
+message Package {
+  int32 Type = 1;
+  int32 MaxCapacity = 2;
+  map<int32, int64> ItemCd = 3;
+  map<int64, Item> Items = 4;
+  int64 PublicCd = 5;
+}
+
+// Item package container
+message ItemPackage {
+  map<int32, Package> Packages = 1;
+  map<int32, int32> UnlockItems = 2;
+  int32 QuickBar = 3;
+  int32 ItemUuid = 4;
+  map<int32, int64> UseGroupCd = 5;
+}
+
+// Module info with upgrade records
+message ModPartUpgradeRecord {
+  int32 PartId = 1;
+  bool IsSuccess = 2;
+}
+
+message ModInfo {
+  repeated int32 PartIds = 1;
+  ModPartUpgradeRecord UpgradeRecords = 2;
+  int32 SuccessRate = 3;
+  repeated int32 InitLinkNums = 4;
+}
+
+// Mod container
+message Mod {
+  map<int32, int64> ModSlots = 1;
+  map<int64, ModInfo> ModInfos = 2;
+}
+
+// Character serialize data (main container)
+message CharSerialize {
+  repeated int64 CharId = 1;
+  bytes CharBaseInfo = 2;
+  bytes SceneData = 3;
+  bytes SceneLuaData = 4;
+  bytes PioneerData = 5;
+  bytes BuffDBInfo = 6;
+  ItemPackage ItemPackage = 7;
+  bytes QuestDataList = 8;
+  // ... other fields ...
+  Mod Mod = 57;  // Field number 0x39 = 57
+}
+
+// SyncContainerData - the main packet wrapper
+message SyncContainerData {
+  CharSerialize VData = 1;
+}
+

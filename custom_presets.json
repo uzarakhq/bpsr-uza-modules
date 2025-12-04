@@ -1,0 +1,15 @@
+{
+    "Manual Input / Clear": "",
+    "Shield Knight": "Resistance, Armor, Crit Focus",
+    "Stormblade": "Agility Boost, Special Attack, Elite Strike, Crit Focus",
+    "Frost Mage": "Intellect Boost, Special Attack, Elite Strike, Cast Focus, Crit Focus, Luck Focus",
+    "Wind Knight": "Strength Boost, Special Attack, Elite Strike, Attack SPD",
+    "Verdant Oracle": "Intellect Boost, Healing Boost, Healing Enhance, Luck Focus",
+    "Heavy Guardian": "Strength Boost, Resistance, Armor, Crit Focus, Luck Focus",
+    "Marksman": "Agility Boost, Special Attack, Elite Strike, Attack SPD",
+    "Beat Performer": "Intellect Boost, Healing Boost, Healing Enhance, Attack SPD, Luck Focus",
+    "All": "DMG Stack, Agile, Life Condense, First Aid, Life Wave, Life Steal, Team Luck & Crit, Final Protection, Strength Boost, Agility Boost, Intellect Boost, Special Attack, Elite Strike, Healing Boost, Healing Enhance, Cast Focus, Attack SPD, Crit Focus, Luck Focus, Resistance, Armor",
+    "Damage Class": "Strength Boost, Agility Boost, Intellect Boost, Special Attack, Elite Strike, Cast Focus, Attack SPD, Crit Focus, Luck Focus",
+    "Defense/Support": "Strength Boost, Agility Boost, Intellect Boost, Healing Boost, Healing Enhance, Cast Focus, Attack SPD, Crit Focus, Luck Focus, Resistance, Armor",
+    "test": "Agile, First Aid, Life Condense"
+}

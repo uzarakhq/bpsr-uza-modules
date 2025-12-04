@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: file:; font-src 'self' data: https://fonts.gstatic.com;">
+  <title>BPSR Uza Modules</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <img src="../icon.png" alt="Icon" class="app-icon">
+        <h1 class="app-title">BPSR Uza Modules</h1>
+        <span class="app-author">by Uzarak</span>
+      </div>
+      <div class="header-right">
+        <!-- <div class="social-links">
+          <button class="social-btn" data-url="https://kick.com/mrsnakevt" title="Kick">
+            <img src="../Icons/kick.png" alt="Kick">
+          </button>
+          <button class="social-btn" data-url="https://www.youtube.com/@MrSnake_VT" title="YouTube">
+            <img src="../Icons/youtube.png" alt="YouTube">
+          </button>
+          <button class="social-btn" data-url="https://x.com/MrSnakeVT" title="X/Twitter">
+            <img src="../Icons/x-twitter.png" alt="X">
+          </button>
+        </div> -->
+        <select id="language-select" class="language-select">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Filters Section -->
+      <section class="filters-section">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label for="module-type" data-i18n="moduleType">Module Type:</label>
+            <select id="module-type" class="select-input">
+              <option value="All">All</option>
+              <option value="Attack">Attack</option>
+              <option value="Guard">Guard</option>
+              <option value="Support">Support</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="network-interface" data-i18n="networkInterface">Network Interface:</label>
+            <select id="network-interface" class="select-input">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Attribute Buttons -->
+        <div class="attributes-section">
+          <div class="attributes-header">
+            <span data-i18n="selectAttributes">Select Attributes:</span>
+            <button id="select-all-btn" class="pill-btn" data-i18n="all">All</button>
+          </div>
+          <div id="attributes-container" class="attributes-grid">
+            <!-- Attribute buttons will be generated here -->
+          </div>
+        </div>
+
+        <!-- Priority Mode -->
+        <div class="priority-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="priority-mode-checkbox">
+            <span data-i18n="priorityMode">Enable Priority Ordering Mode (max 6 attributes)</span>
+          </label>
+          <div id="priority-list" class="priority-list hidden">
+            <!-- Priority ordered attributes will be listed here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Control Buttons -->
+      <div class="controls-row">
+        <div class="control-buttons">
+          <button id="start-btn" class="btn btn-primary">
+            <img src="../Icons/play.png" alt="" class="btn-icon">
+            <span data-i18n="startMonitoring">Capture Modules</span>
+          </button>
+          <button id="stop-btn" class="btn btn-secondary" disabled>
+            <img src="../Icons/stop.png" alt="" class="btn-icon">
+            <span data-i18n="stopMonitoring">Stop Capturing</span>
+          </button>
+          <button id="refilter-btn" class="btn btn-outline" disabled>
+            <span>🔍</span>
+            <span data-i18n="refilter">Optimize</span>
+          </button>
+        </div>
+        <div class="instruction-box" id="instruction-box">
+          <span class="instruction-icon">⚠️</span>
+          <span class="instruction-text" id="instruction-text" data-i18n="instruction">
+            Before pressing Start, move your character to a location with few players around.
+          </span>
+        </div>
+      </div>
+
+      <!-- Distribution Filter -->
+      <div id="distribution-filter" class="distribution-filter hidden">
+        <span data-i18n="attrDistribution">Attr. Distribution:</span>
+        <div class="dist-buttons">
+          <button class="dist-btn active" data-filter="All">All</button>
+          <button class="dist-btn" data-filter="Lv.5">Lv.5</button>
+          <button class="dist-btn" data-filter="Lv.5/Lv.5">Lv.5/Lv.5</button>
+          <button class="dist-btn" data-filter="Lv.5/Lv.6">Lv.5/Lv.6</button>
+          <button class="dist-btn" data-filter="Lv.6/Lv.6">Lv.6/Lv.6</button>
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <span id="status-text" data-i18n="statusIdle">Status: Idle</span>
+      </div>
+
+      <!-- Results Section -->
+      <section id="results-section" class="results-section">
+        <h2 data-i18n="combinations">Combinations</h2>
+        <div id="results-container" class="results-grid">
+          <!-- Results will be rendered here -->
+          <div class="empty-state">
+            <span data-i18n="noResults">Start monitoring to capture module data.</span>
+          </div>
+        </div>
+        
+        <!-- Pagination -->
+        <div id="pagination" class="pagination hidden">
+          <button id="prev-page" class="btn btn-small" disabled>← Previous</button>
+          <span id="page-info">Page 1 / 1</span>
+          <button id="next-page" class="btn btn-small" disabled>Next →</button>
+        </div>
+      </section>
+
+      <!-- Loading Overlay -->
+      <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <span data-i18n="generating">Generating combinations, please wait...</span>
+      </div>
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
+
