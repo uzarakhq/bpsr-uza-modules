@@ -77,6 +77,7 @@ const elements = {
   resultsContainer: document.getElementById('results-container'),
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingStatus: document.getElementById('loading-status'),
+  progressBar: document.getElementById('progress-bar'),
 };
 
 // Initialize
@@ -332,7 +333,20 @@ function setupIPCListeners() {
     setStatus('custom', message);
     // Update loading overlay status if visible
     if (!elements.loadingOverlay.classList.contains('hidden')) {
-      elements.loadingStatus.textContent = message;
+      // Parse progress from message (format: "Task x/15 completed. Highest score: ...")
+      const taskMatch = message.match(/Task (\d+)\/(\d+)/);
+      if (taskMatch) {
+        const current = parseInt(taskMatch[1], 10);
+        const total = parseInt(taskMatch[2], 10);
+        const progress = (current / total) * 100;
+        elements.progressBar.style.width = `${progress}%`;
+        // Keep a generic message instead of the detailed task message
+        const t = translations[currentLanguage];
+        elements.loadingStatus.textContent = t.generating;
+      } else {
+        // For non-task messages, just update the text
+        elements.loadingStatus.textContent = message;
+      }
     }
   });
 
@@ -568,6 +582,8 @@ function setStatus(key, customMessage = '') {
 // Show/hide loading
 function showLoading(message = '') {
   elements.loadingOverlay.classList.remove('hidden');
+  // Reset progress bar
+  elements.progressBar.style.width = '0%';
   if (message) {
     elements.loadingStatus.textContent = message;
   } else {
@@ -578,6 +594,8 @@ function showLoading(message = '') {
 
 function hideLoading() {
   elements.loadingOverlay.classList.add('hidden');
+  // Reset progress bar
+  elements.progressBar.style.width = '0%';
 }
 
 // Initialize when DOM is ready

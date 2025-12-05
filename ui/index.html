@@ -134,8 +134,12 @@
 
       <!-- Loading Overlay -->
       <div id="loading-overlay" class="loading-overlay hidden">
-        <div class="loading-spinner"></div>
-        <span id="loading-status" data-i18n="generating">Generating combinations, please wait...</span>
+        <div class="progress-container">
+          <div class="progress-bar-wrapper">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+          <span id="loading-status" data-i18n="generating">Generating combinations, please wait...</span>
+        </div>
       </div>
     </main>
   </div>
