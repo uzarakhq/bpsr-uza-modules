@@ -101,7 +101,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      devTools: !isProduction, // Disable DevTools in production
+      devTools: true, // Always enable DevTools (can be opened with F12 or Ctrl+Shift+I)
       enableRemoteModule: false,
       sandbox: false, // Required for native modules like 'cap'
       webSecurity: true,
@@ -113,17 +113,12 @@ function createWindow() {
     frame: true,
     titleBarStyle: 'default',
     show: false,
-    paintWhenInitiallyHidden: false, // Performance optimization
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    // Open DevTools automatically in dev mode
-    if (isDevMode) {
-      mainWindow.webContents.openDevTools();
-    }
   });
 
   // Performance optimization: Set zoom factor after load
@@ -133,8 +128,8 @@ function createWindow() {
     });
   }
 
-  // Prevent DevTools from opening in production
-  if (isProduction) {
+  // Prevent DevTools shortcuts only in production builds (not in dev mode)
+  if (isProduction && !isDevMode) {
     mainWindow.webContents.on('before-input-event', (event, input) => {
       // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
       if (input.key === 'F12' || 
@@ -288,5 +283,19 @@ ipcMain.handle('has-captured-data', async () => {
 // Open external URL
 ipcMain.handle('open-external', async (event, url) => {
   shell.openExternal(url);
+});
+
+// Check if Npcap is available
+ipcMain.handle('check-npcap', async () => {
+  try {
+    // Try to load cap library - if it fails, Npcap is not installed
+    const Cap = require('cap').Cap;
+    // Try to get device list - if this fails, Npcap might not be properly installed
+    const devices = Cap.deviceList();
+    return { available: true, devicesFound: devices.length > 0 };
+  } catch (err) {
+    logger.warn(`Npcap check failed: ${err.message}`);
+    return { available: false, error: err.message };
+  }
 });
 

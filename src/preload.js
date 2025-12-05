@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // External links
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   
+  // Npcap check
+  checkNpcap: () => ipcRenderer.invoke('check-npcap'),
+  
   // Event listeners
   onDataCaptured: (callback) => {
     ipcRenderer.on('data-captured', callback);

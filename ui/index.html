@@ -143,6 +143,32 @@
     </main>
   </div>
 
+  <!-- Npcap Missing Modal -->
+  <div id="npcap-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">⚠️ Npcap Required</h2>
+      </div>
+      <div class="modal-body">
+        <p>Npcap is required for packet capture functionality.</p>
+        <p>Please install Npcap to use this application:</p>
+        <ol style="text-align: left; margin: 16px 0; padding-left: 24px;">
+          <li>Download Npcap from the official website</li>
+          <li>Install it with <strong>"WinPcap API-compatible Mode"</strong> enabled</li>
+          <li>Restart this application</li>
+        </ol>
+        <div class="modal-actions">
+          <button id="npcap-download-btn" class="btn btn-primary">
+            Download Npcap
+          </button>
+          <button id="npcap-close-btn" class="btn btn-secondary">
+            Continue Anyway
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>

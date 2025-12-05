@@ -78,10 +78,16 @@ const elements = {
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingStatus: document.getElementById('loading-status'),
   progressBar: document.getElementById('progress-bar'),
+  npcapModal: document.getElementById('npcap-modal'),
+  npcapDownloadBtn: document.getElementById('npcap-download-btn'),
+  npcapCloseBtn: document.getElementById('npcap-close-btn'),
 };
 
 // Initialize
 async function init() {
+  // Check for Npcap first
+  await checkNpcap();
+
   // Load network interfaces
   networkInterfaces = await window.electronAPI.getNetworkInterfaces();
   populateNetworkInterfaces();
@@ -100,7 +106,31 @@ async function init() {
   applyLanguage(currentLanguage);
 }
 
-// Populate network interfaces dropdown
+// Check if Npcap is installed
+async function checkNpcap() {
+  try {
+    const result = await window.electronAPI.checkNpcap();
+    if (!result.available) {
+      showNpcapModal();
+    }
+  } catch (err) {
+    console.error('Failed to check Npcap:', err);
+    // Show modal on error to be safe
+    showNpcapModal();
+  }
+}
+
+// Show Npcap modal
+function showNpcapModal() {
+  elements.npcapModal.classList.remove('hidden');
+}
+
+// Hide Npcap modal
+function hideNpcapModal() {
+  elements.npcapModal.classList.add('hidden');
+}
+
+// Populate network interfaces dropdown (optimized with DocumentFragment)
 function populateNetworkInterfaces() {
   elements.networkInterface.innerHTML = '';
   
@@ -138,6 +168,9 @@ function populateNetworkInterfaces() {
     }
   }
   
+  // Use DocumentFragment for better performance
+  const fragment = document.createDocumentFragment();
+  
   networkInterfaces.forEach((iface, index) => {
     const option = document.createElement('option');
     option.value = iface.name;
@@ -151,23 +184,30 @@ function populateNetworkInterfaces() {
     if (index === defaultIndex) {
       option.selected = true;
     }
-    elements.networkInterface.appendChild(option);
+    fragment.appendChild(option);
   });
+  
+  elements.networkInterface.appendChild(fragment);
 }
 
-// Create attribute buttons
+// Create attribute buttons (optimized with DocumentFragment)
 function createAttributeButtons() {
   elements.attributesContainer.innerHTML = '';
+  
+  // Use DocumentFragment for better performance
+  const fragment = document.createDocumentFragment();
+  
   allAttributes.forEach(attr => {
     const btn = document.createElement('button');
     btn.className = 'pill-btn';
     btn.dataset.attr = attr;
     
-    // Add attribute image
+    // Add attribute image with lazy loading
     const img = document.createElement('img');
     img.src = `../Attributes/${attr}.webp`;
     img.className = 'attr-icon';
     img.alt = attr;
+    img.loading = 'lazy'; // Lazy load images
     img.onerror = function() { this.style.display = 'none'; };
     
     const text = document.createElement('span');
@@ -176,8 +216,10 @@ function createAttributeButtons() {
     btn.appendChild(img);
     btn.appendChild(text);
     btn.addEventListener('click', () => toggleAttribute(attr, btn));
-    elements.attributesContainer.appendChild(btn);
+    fragment.appendChild(btn);
   });
+  
+  elements.attributesContainer.appendChild(fragment);
 }
 
 // Toggle attribute selection
@@ -241,21 +283,49 @@ function updatePriorityList() {
   elements.priorityList.innerHTML = '';
 
   if (prioritizedAttrs.length === 0) {
-    elements.priorityList.innerHTML = '<div class="empty-state">Select attributes to prioritize (max 6).</div>';
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state';
+    emptyState.textContent = 'Select attributes to prioritize (max 6).';
+    elements.priorityList.appendChild(emptyState);
     return;
   }
+
+  // Use DocumentFragment for better performance
+  const fragment = document.createDocumentFragment();
 
   prioritizedAttrs.forEach((attr, index) => {
     const item = document.createElement('div');
     item.className = 'priority-item';
-    item.innerHTML = `
-      <span class="priority-item-name">${index + 1}. ${attr}</span>
-      <button class="priority-item-btn" onclick="movePriorityAttr('${attr}', -1)" ${index === 0 ? 'disabled' : ''}>▲</button>
-      <button class="priority-item-btn" onclick="movePriorityAttr('${attr}', 1)" ${index === prioritizedAttrs.length - 1 ? 'disabled' : ''}>▼</button>
-      <button class="priority-item-btn remove" onclick="removePriorityAttr('${attr}')">✕</button>
-    `;
-    elements.priorityList.appendChild(item);
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'priority-item-name';
+    nameSpan.textContent = `${index + 1}. ${attr}`;
+    item.appendChild(nameSpan);
+    
+    const upBtn = document.createElement('button');
+    upBtn.className = 'priority-item-btn';
+    upBtn.textContent = '▲';
+    upBtn.disabled = index === 0;
+    upBtn.onclick = () => movePriorityAttr(attr, -1);
+    item.appendChild(upBtn);
+    
+    const downBtn = document.createElement('button');
+    downBtn.className = 'priority-item-btn';
+    downBtn.textContent = '▼';
+    downBtn.disabled = index === prioritizedAttrs.length - 1;
+    downBtn.onclick = () => movePriorityAttr(attr, 1);
+    item.appendChild(downBtn);
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'priority-item-btn remove';
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = () => removePriorityAttr(attr);
+    item.appendChild(removeBtn);
+    
+    fragment.appendChild(item);
   });
+  
+  elements.priorityList.appendChild(fragment);
 }
 
 // Move priority attribute up/down
@@ -323,6 +393,35 @@ function setupEventListeners() {
     btn.addEventListener('click', () => {
       setDistributionFilter(btn.dataset.filter);
     });
+  });
+
+  // Npcap modal buttons
+  if (elements.npcapDownloadBtn) {
+    elements.npcapDownloadBtn.addEventListener('click', () => {
+      window.electronAPI.openExternal('https://npcap.com/');
+    });
+  }
+
+  if (elements.npcapCloseBtn) {
+    elements.npcapCloseBtn.addEventListener('click', () => {
+      hideNpcapModal();
+    });
+  }
+
+  // Close modal when clicking outside
+  if (elements.npcapModal) {
+    elements.npcapModal.addEventListener('click', (e) => {
+      if (e.target === elements.npcapModal) {
+        hideNpcapModal();
+      }
+    });
+  }
+
+  // Close modal with Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !elements.npcapModal.classList.contains('hidden')) {
+      hideNpcapModal();
+    }
   });
 }
 
@@ -423,6 +522,19 @@ async function stopMonitoring() {
   updateInstruction('instruction');
 }
 
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 // Rescreen modules (debounced version for frequent calls)
 const debouncedRescreen = debounce(async function() {
   const category = elements.moduleType.value;
@@ -442,19 +554,6 @@ const debouncedRescreen = debounce(async function() {
 // Rescreen modules
 async function rescreenModules() {
   await debouncedRescreen();
-}
-
-// Debounce utility
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
 }
 
 // Apply distribution filter
@@ -491,20 +590,30 @@ function applyFiltersAndDisplay() {
   displayCurrentPage();
 }
 
-// Display all results
+// Display all results (optimized with DocumentFragment and requestAnimationFrame)
 function displayCurrentPage() {
-  if (filteredResults.length === 0) {
-    renderEmptyState();
-    return;
-  }
+  requestAnimationFrame(() => {
+    if (filteredResults.length === 0) {
+      renderEmptyState();
+      return;
+    }
 
-  elements.resultsContainer.innerHTML = filteredResults.map((sol, i) => 
-    renderResultCard(sol, i + 1)
-  ).join('');
+    // Use DocumentFragment for better performance
+    const fragment = document.createDocumentFragment();
+    
+    filteredResults.forEach((sol, i) => {
+      const cardElement = createResultCardElement(sol, i + 1);
+      fragment.appendChild(cardElement);
+    });
+
+    // Clear and append in one operation
+    elements.resultsContainer.innerHTML = '';
+    elements.resultsContainer.appendChild(fragment);
+  });
 }
 
-// Render result card
-function renderResultCard(solution, rank) {
+// Create result card element (optimized with DOM elements and lazy loading)
+function createResultCardElement(solution, rank) {
   const totalAttrValue = Object.values(solution.attrBreakdown).reduce((a, b) => a + b, 0);
   const rarityColors = {
     'Rare': 'rare',
@@ -512,33 +621,82 @@ function renderResultCard(solution, rank) {
     'Legendary': 'legendary',
   };
 
-  const modulesHtml = solution.modules.map(module => {
+  // Create main card element
+  const card = document.createElement('div');
+  card.className = 'result-card';
+
+  // Create header
+  const header = document.createElement('div');
+  header.className = 'result-header';
+  const rankDiv = document.createElement('div');
+  rankDiv.className = 'result-rank';
+  rankDiv.innerHTML = `
+    <div>Effects: ${totalAttrValue}</div> 
+    <div>Ability Score: ${Math.round(solution.score)}</div>
+    <div>Rank ${rank} (Score: ${solution.optimizationScore.toFixed(2)})</div>
+  `;
+  header.appendChild(rankDiv);
+  card.appendChild(header);
+
+  // Create modules container
+  const modulesContainer = document.createElement('div');
+  modulesContainer.className = 'result-modules';
+  
+  solution.modules.forEach(module => {
     const rarity = module.name.split(' ')[0];
     const rarityClass = rarityColors[rarity] || '';
-    const attrsHtml = module.parts.map(part => 
-      `<div class="module-attr-line">
-        <img src="../Attributes/${part.name}.webp" alt="${part.name}" class="module-attr-icon" onerror="this.style.display='none'">
-        <span>+${part.value}</span>
-      </div>`
-    ).join('');
     
-    // Map module name to image filename (remove "-Preferred" suffix if present)
+    const moduleCard = document.createElement('div');
+    moduleCard.className = `module-card ${rarityClass}`;
+    
+    const moduleIcon = document.createElement('div');
+    moduleIcon.className = 'module-icon';
+    const moduleImg = document.createElement('img');
     const imageName = module.name.replace(/-Preferred$/, '');
-    const imagePath = `../Modules/${imageName}.webp`;
+    moduleImg.src = `../Modules/${imageName}.webp`;
+    moduleImg.alt = module.name;
+    moduleImg.className = 'module-image';
+    moduleImg.loading = 'lazy'; // Lazy load images
+    moduleImg.onerror = function() { this.style.display = 'none'; };
+    moduleIcon.appendChild(moduleImg);
+    moduleCard.appendChild(moduleIcon);
     
-    return `
-      <div class="module-card ${rarityClass}">
-        <div class="module-icon">
-          <img src="${imagePath}" alt="${module.name}" class="module-image" onerror="this.style.display='none'">
-        </div>
-        <div class="module-attrs">${attrsHtml}</div>
-      </div>
-    `;
-  }).join('');
+    const attrsDiv = document.createElement('div');
+    attrsDiv.className = 'module-attrs';
+    module.parts.forEach(part => {
+      const attrLine = document.createElement('div');
+      attrLine.className = 'module-attr-line';
+      const attrImg = document.createElement('img');
+      attrImg.src = `../Attributes/${part.name}.webp`;
+      attrImg.alt = part.name;
+      attrImg.className = 'module-attr-icon';
+      attrImg.loading = 'lazy'; // Lazy load images
+      attrImg.onerror = function() { this.style.display = 'none'; };
+      const attrSpan = document.createElement('span');
+      attrSpan.textContent = `+${part.value}`;
+      attrLine.appendChild(attrImg);
+      attrLine.appendChild(attrSpan);
+      attrsDiv.appendChild(attrLine);
+    });
+    moduleCard.appendChild(attrsDiv);
+    modulesContainer.appendChild(moduleCard);
+  });
+  card.appendChild(modulesContainer);
 
-  const attrDistHtml = Object.entries(solution.attrBreakdown)
+  // Create attribute distribution
+  const attrDist = document.createElement('div');
+  attrDist.className = 'attr-distribution';
+  const title = document.createElement('div');
+  title.className = 'attr-distribution-title';
+  title.textContent = 'Attribute Distribution:';
+  attrDist.appendChild(title);
+  
+  const attrList = document.createElement('div');
+  attrList.className = 'attr-distribution-list';
+  
+  Object.entries(solution.attrBreakdown)
     .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => {
+    .forEach(([name, value]) => {
       let level = 0;
       if (value >= 20) level = 6;
       else if (value >= 16) level = 5;
@@ -548,28 +706,32 @@ function renderResultCard(solution, rank) {
       else if (value >= 1) level = 1;
       
       const isHighLevel = level >= 5;
-      return `<div class="attr-dist-item ${isHighLevel ? 'high-level' : ''}">
-        <img src="../Attributes/${name}.webp" alt="${name}" class="attr-dist-icon" onerror="this.style.display='none'">
-        <span>${name} (Lv.${level}): +${value}</span>
-      </div>`;
-    }).join('');
+      const item = document.createElement('div');
+      item.className = `attr-dist-item ${isHighLevel ? 'high-level' : ''}`;
+      const distImg = document.createElement('img');
+      distImg.src = `../Attributes/${name}.webp`;
+      distImg.alt = name;
+      distImg.className = 'attr-dist-icon';
+      distImg.loading = 'lazy'; // Lazy load images
+      distImg.onerror = function() { this.style.display = 'none'; };
+      const distSpan = document.createElement('span');
+      distSpan.textContent = `${name} (Lv.${level}): +${value}`;
+      item.appendChild(distImg);
+      item.appendChild(distSpan);
+      attrList.appendChild(item);
+    });
+  
+  attrDist.appendChild(attrList);
+  card.appendChild(attrDist);
 
-  return `
-    <div class="result-card">
-      <div class="result-header">
-        <div class="result-rank">
-          <div>Effects: ${totalAttrValue}</div> 
-          <div>Ability Score: ${Math.round(solution.score)}</div>
-          <div>Rank ${rank} (Score: ${solution.optimizationScore.toFixed(2)})</div>
-        </div>
-      </div>
-      <div class="result-modules">${modulesHtml}</div>
-      <div class="attr-distribution">
-        <div class="attr-distribution-title">Attribute Distribution:</div>
-        <div class="attr-distribution-list">${attrDistHtml}</div>
-      </div>
-    </div>
-  `;
+  return card;
+}
+
+// Legacy function for compatibility (if needed elsewhere)
+function renderResultCard(solution, rank) {
+  // This is kept for backward compatibility but should use createResultCardElement instead
+  const element = createResultCardElement(solution, rank);
+  return element.outerHTML;
 }
 
 // Render empty state
