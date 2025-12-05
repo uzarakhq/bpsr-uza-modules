@@ -285,7 +285,7 @@ ipcMain.handle('open-external', async (event, url) => {
   shell.openExternal(url);
 });
 
-// Check if Npcap is available
+// Check if Npcap is available (optional - returns false if not available, doesn't throw)
 ipcMain.handle('check-npcap', async () => {
   try {
     // Try to load cap library - if it fails, Npcap is not installed
@@ -294,7 +294,8 @@ ipcMain.handle('check-npcap', async () => {
     const devices = Cap.deviceList();
     return { available: true, devicesFound: devices.length > 0 };
   } catch (err) {
-    logger.warn(`Npcap check failed: ${err.message}`);
+    // Npcap not available - this is OK, app can still work
+    logger.info(`Npcap not available: ${err.message} - app will continue without packet capture`);
     return { available: false, error: err.message };
   }
 });

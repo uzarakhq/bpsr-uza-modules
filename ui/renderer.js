@@ -115,7 +115,7 @@ async function checkNpcap() {
     }
   } catch (err) {
     console.error('Failed to check Npcap:', err);
-    // Show modal on error to be safe
+    // Show modal on error to inform user
     showNpcapModal();
   }
 }

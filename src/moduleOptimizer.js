@@ -5,6 +5,8 @@
  */
 
 const os = require('os');
+const path = require('path');
+const { Worker } = require('worker_threads');
 const {
   ModuleInfo,
   ModuleCategory,
@@ -507,18 +509,104 @@ class ModuleOptimizer {
 
     const workingPool = highQualityModules.length >= 4 ? highQualityModules : candidateModules;
 
-    // Run GA campaigns
+    // Run GA campaigns in parallel using worker threads
     const allBestSolutions = [];
-    if (progressCallback) progressCallback(`Running ${this.numCampaigns} optimization tasks...`);
+    if (progressCallback) progressCallback(`Running ${this.numCampaigns} optimization tasks in parallel...`);
+
+    // Create workers for parallel execution
+    const workers = [];
+    const workerPromises = [];
+    let completedCount = 0;
 
     for (let i = 0; i < this.numCampaigns; i++) {
-      const results = runSingleGaCampaign(workingPool, category, prioritizedAttrs, this.gaParams);
-      if (results.length > 0) {
-        allBestSolutions.push(...results);
-        const bestScore = results[0].optimizationScore;
-        // Task completed
-        if (progressCallback) progressCallback(`Task ${i + 1}/${this.numCampaigns} completed. Highest score: ${bestScore.toFixed(2)}`);
+      const workerPromise = new Promise((resolve, reject) => {
+        const workerPath = path.join(__dirname, 'gaWorker.js');
+        const worker = new Worker(workerPath);
+
+        worker.on('message', (data) => {
+          if (data.success) {
+            // Reconstruct ModuleSolution objects from worker results
+            const reconstructedResults = data.results.map(result => {
+              const solution = new ModuleSolution(result.modules);
+              solution.attrBreakdown = result.attrBreakdown;
+              solution.score = result.score;
+              solution.optimizationScore = result.optimizationScore;
+              // Verify combination ID matches (for debugging)
+              if (result.combinationId && solution.getCombinationId() !== result.combinationId) {
+                this.logger.warn('Combination ID mismatch in worker result');
+              }
+              return solution;
+            });
+
+            if (reconstructedResults.length > 0) {
+              allBestSolutions.push(...reconstructedResults);
+              completedCount++;
+              const bestScore = reconstructedResults[0].optimizationScore;
+              if (progressCallback) {
+                progressCallback(`Task ${completedCount}/${this.numCampaigns} completed. Highest score: ${bestScore.toFixed(2)}`);
+              }
+            }
+
+            resolve(reconstructedResults);
+          } else {
+            this.logger.warn(`Campaign ${data.campaignId} failed: ${data.error}`);
+            resolve([]);
+          }
+        });
+
+        worker.on('error', (error) => {
+          this.logger.error(`Worker error in campaign ${i + 1}: ${error.message}`);
+          reject(error);
+        });
+
+        worker.on('exit', (code) => {
+          if (code !== 0) {
+            this.logger.warn(`Worker ${i + 1} stopped with exit code ${code}`);
+          }
+        });
+
+        workers.push(worker);
+
+        // Send work to worker
+        worker.postMessage({
+          modules: workingPool,
+          category,
+          prioritizedAttrs,
+          gaParams: this.gaParams,
+          campaignId: i + 1
+        });
+      });
+
+      workerPromises.push(workerPromise);
+    }
+
+    // Wait for all workers to complete
+    try {
+      await Promise.all(workerPromises);
+    } catch (error) {
+      this.logger.error(`Error in parallel execution: ${error.message}`);
+      // Fallback to sequential execution if parallel fails
+      this.logger.warn('Falling back to sequential execution');
+      allBestSolutions.length = 0; // Clear any partial results
+      for (let i = 0; i < this.numCampaigns; i++) {
+        const results = runSingleGaCampaign(workingPool, category, prioritizedAttrs, this.gaParams);
+        if (results.length > 0) {
+          allBestSolutions.push(...results);
+          const bestScore = results[0].optimizationScore;
+          if (progressCallback) {
+            progressCallback(`Task ${i + 1}/${this.numCampaigns} completed. Highest score: ${bestScore.toFixed(2)}`);
+          }
+        }
       }
+    } finally {
+      // Terminate all workers
+      workers.forEach(worker => {
+        try {
+          worker.terminate();
+        } catch (err) {
+          this.logger.warn(`Error terminating worker: ${err.message}`);
+        }
+      });
     }
 
     // Deduplicate and finalize

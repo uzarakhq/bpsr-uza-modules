@@ -199,9 +199,17 @@ class PacketCapture {
       this.statusInterval = setInterval(() => this._sendStatusUpdate(), 5000);
     } catch (err) {
       logger.warn(`Could not load native packet capture library: ${err.message}`);
+      logger.info('Running in simulated mode - packet capture will not work without Npcap');
       
       // In simulated mode, we just keep running without actual capture
       this._simulatedMode = true;
+      
+      // Still start status updates so UI knows it's running
+      this.statusInterval = setInterval(() => {
+        if (this.statusCallback) {
+          this.statusCallback('Packet capture unavailable - Npcap is required for network capture. App is running in simulated mode.');
+        }
+      }, 5000);
     }
   }
 
@@ -238,6 +246,12 @@ class PacketCapture {
    */
   _sendStatusUpdate() {
     if (!this.isRunning || !this.statusCallback) return;
+    
+    // If in simulated mode (no Npcap), show appropriate message
+    if (this._simulatedMode) {
+      this.statusCallback('Packet capture unavailable - Npcap is required for network capture. Install Npcap to capture game packets.');
+      return;
+    }
     
     let status = '';
     if (this.currentServer) {
