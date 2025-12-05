@@ -9,6 +9,100 @@ const { getLogger } = require('./logger');
 const logger = getLogger('NetworkInterfaceUtil');
 
 /**
+ * Check if an interface is a virtual network or VPN
+ * @param {string} name - Interface name
+ * @param {string} description - Interface description
+ * @returns {boolean} True if virtual/VPN
+ */
+function isVirtualOrVPN(name, description) {
+  if (!name && !description) {
+    return false;
+  }
+  
+  const nameLower = (name || '').toLowerCase();
+  const descLower = (description || '').toLowerCase();
+  const combined = `${nameLower} ${descLower}`;
+  
+  // Only filter out clearly virtual/VPN interfaces
+  // Be very conservative - only filter if we're certain it's virtual
+  
+  // 1. Filter loopback interfaces
+  if (nameLower.startsWith('lo') && nameLower.length <= 3) {
+    return true; // lo, lo0, etc.
+  }
+  if (nameLower === 'loopback' || descLower.includes('loopback')) {
+    return true;
+  }
+  
+  // 2. Filter known virtual machine adapters (very specific)
+  if (combined.includes('virtualbox') || 
+      combined.includes('vmware virtual ethernet') ||
+      combined.includes('vmware network adapter') ||
+      (combined.includes('hyper-v') && combined.includes('virtual')) ||
+      combined.includes('vethernet')) {
+    return true;
+  }
+  
+  // 3. Filter known VPN services (very specific)
+  if (combined.includes('hamachi') ||
+      combined.includes('zerotier') ||
+      combined.includes('tailscale') ||
+      (combined.includes('wireguard') && combined.includes('tunnel')) ||
+      (combined.includes('openvpn') && (combined.includes('tun') || combined.includes('tap')))) {
+    return true;
+  }
+  
+  // 4. Filter TUN/TAP adapters ONLY if they're explicitly VPN-related
+  // Don't filter generic TUN/TAP as they might be legitimate
+  if ((nameLower.startsWith('tun') || nameLower.startsWith('tap')) &&
+      (combined.includes('vpn') || combined.includes('openvpn') || 
+       combined.includes('wireguard') || combined.includes('softether'))) {
+    return true;
+  }
+  
+  // 5. Filter transition technologies (IPv6 transition)
+  if (nameLower.includes('isatap') || 
+      nameLower.includes('teredo') || 
+      nameLower.includes('6to4')) {
+    return true;
+  }
+  
+  // Default: don't filter (be conservative)
+  return false;
+}
+
+/**
+ * Get friendly name for network interface
+ * @param {string} name - Interface name
+ * @param {string} description - Interface description
+ * @returns {string} Friendly name
+ */
+function getFriendlyName(name, description) {
+  const descLower = (description || '').toLowerCase();
+  const nameLower = (name || '').toLowerCase();
+  
+  // Check description first (usually more descriptive)
+  if (descLower.includes('wi-fi') || descLower.includes('wifi') || descLower.includes('wireless') || descLower.includes('802.11')) {
+    return 'WiFi';
+  }
+  if (descLower.includes('ethernet') || descLower.includes('gigabit') || descLower.includes('fast ethernet')) {
+    return 'Ethernet';
+  }
+  
+  // Check name patterns
+  if (nameLower.includes('wifi') || nameLower.includes('wlan') || nameLower.includes('wireless')) {
+    return 'WiFi';
+  }
+  if (nameLower.includes('ethernet') || nameLower.startsWith('eth') || 
+      (nameLower.startsWith('en') && !nameLower.includes('wifi') && !nameLower.includes('wlan'))) {
+    return 'Ethernet';
+  }
+  
+  // Fallback to description if available, otherwise name
+  return description || name;
+}
+
+/**
  * Get all network interfaces using cap's device list for proper Windows support
  * @returns {Array} List of network interface information
  */
@@ -21,9 +115,12 @@ function getNetworkInterfaces() {
     const capDevices = Cap.deviceList();
     
     for (const device of capDevices) {
-      // Filter out loopback interfaces
-      if (device.name.toLowerCase().includes('loopback') ||
-          device.description?.toLowerCase().includes('loopback')) {
+      // Filter out virtual networks and VPNs
+      if (isVirtualOrVPN(device.name, device.description)) {
+        // Only log debug info in development mode
+        if (logger.debug) {
+          logger.debug(`Filtered out virtual/VPN interface: ${device.name} - ${device.description}`);
+        }
         continue;
       }
 
@@ -38,9 +135,15 @@ function getNetworkInterfaces() {
 
       // Only include interfaces with IPv4 addresses
       if (ipv4Addresses.length > 0) {
+        const friendlyName = getFriendlyName(device.name, device.description);
+        // Only log debug info in development mode
+        if (logger.debug) {
+          logger.debug(`Including interface: ${device.name} - ${device.description} -> ${friendlyName}`);
+        }
         interfaces.push({
           name: device.name, // This is the proper device name for cap
           description: device.description || device.name,
+          friendlyName: friendlyName,
           addresses: ipv4Addresses,
           isUp: true,
         });
@@ -56,10 +159,12 @@ function getNetworkInterfaces() {
       const netInterfaces = os.networkInterfaces();
       
       for (const [name, addresses] of Object.entries(netInterfaces)) {
-        if (name.toLowerCase().startsWith('lo') || 
-            name.toLowerCase().includes('loopback') ||
-            name.toLowerCase().includes('vethernet') ||
-            name.toLowerCase().includes('vmware')) {
+        // Filter out virtual networks and VPNs
+        if (isVirtualOrVPN(name, name)) {
+          // Only log debug info in development mode
+          if (logger.debug) {
+            logger.debug(`Filtered out virtual/VPN interface: ${name}`);
+          }
           continue;
         }
 
@@ -72,9 +177,15 @@ function getNetworkInterfaces() {
           }));
 
         if (ipv4Addresses.length > 0) {
+          const friendlyName = getFriendlyName(name, name);
+          // Only log debug info in development mode
+          if (logger.debug) {
+            logger.debug(`Including interface: ${name} -> ${friendlyName}`);
+          }
           interfaces.push({
             name: name,
             description: name,
+            friendlyName: friendlyName,
             addresses: ipv4Addresses,
             isUp: true,
           });
@@ -85,6 +196,11 @@ function getNetworkInterfaces() {
     }
   }
 
+  logger.info(`Found ${interfaces.length} network interface(s) after filtering`);
+  if (interfaces.length === 0) {
+    logger.warn('No network interfaces found. This might indicate overly aggressive filtering.');
+  }
+  
   return interfaces;
 }
 

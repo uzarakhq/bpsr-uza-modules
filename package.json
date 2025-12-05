@@ -9,15 +9,18 @@
     "rebuild": "electron-rebuild",
     "postinstall": "electron-rebuild",
     "build": "electron-builder --win",
-    "build:dir": "electron-builder --win --dir"
+    "build:nsis": "electron-builder --win --config.win.target=nsis",
+    "build:portable": "electron-builder --win --config.win.target=portable",
+    "build:dir": "electron-builder --win --dir",
+    "build:prod": "electron-builder --win --publish never",
+    "build:all": "electron-builder --win --x64"
   },
   "author": "Uzarak",
   "license": "MIT",
   "dependencies": {
     "@mongodb-js/zstd": "^1.2.2",
     "cap": "^0.2.1",
-    "protobufjs": "^7.2.6",
-    "zstd-codec": "^0.1.5"
+    "protobufjs": "^7.2.6"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",
@@ -28,25 +31,74 @@
     "appId": "com.uzarak.bpsr-uza-modules",
     "productName": "BPSR Uza Modules",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "src/**/*",
       "ui/**/*",
-      "*.json",
-      "*.ico",
+      "package.json",
+      "icon.ico",
       "*.png",
       "*.webp",
       "Icons/**/*",
       "Attributes/**/*",
-      "Modules/**/*"
+      "Modules/**/*",
+      "!**/node_modules/protobufjs/cli/**",
+      "!**/node_modules/protobufjs/google/**",
+      "!**/node_modules/protobufjs/scripts/**",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/node_modules/**/{.nyc_output,coverage,.nyc_output}",
+      "!**/*.map",
+      "!**/*.log",
+      "!**/test/**/*",
+      "!**/tests/**/*",
+      "!**/.git/**/*",
+      "!**/.vscode/**/*",
+      "!**/dist/**/*"
     ],
+    "extraResources": [],
+    "compression": "maximum",
     "win": {
-      "target": "portable",
-      "icon": "icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icon.ico",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "electronLanguages": ["en", "es"],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BPSR Uza Modules",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico",
+      "deleteAppDataOnUninstall": true,
+      "runAfterFinish": true,
+      "menuCategory": false,
+      "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "portable": {
       "artifactName": "${productName}-${version}-Portable.exe"
-    }
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/cap/**/*",
+      "node_modules/@mongodb-js/zstd/**/*"
+    ]
   }
 }

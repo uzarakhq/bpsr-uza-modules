@@ -74,18 +74,32 @@ function getLogger(name) {
 
     const formattedMessage = formatMessage(levelName, message);
     
-    // Console output with colors
-    const colors = {
-      DEBUG: '\x1b[36m', // Cyan
-      INFO: '\x1b[32m',  // Green
-      WARNING: '\x1b[33m', // Yellow
-      ERROR: '\x1b[31m', // Red
-      RESET: '\x1b[0m',
-    };
+    // Only output to console in development mode or for errors/warnings
+    // In production, only log errors and warnings to console
+    let isProduction = false;
+    try {
+      const electron = require('electron');
+      isProduction = electron.app?.isPackaged || false;
+    } catch (e) {
+      // Electron not available yet, check env
+      isProduction = process.env.NODE_ENV === 'production';
+    }
+    
+    const shouldLogToConsole = !isProduction || level >= LogLevel.WARNING;
+    
+    if (shouldLogToConsole) {
+      const colors = {
+        DEBUG: '\x1b[36m', // Cyan
+        INFO: '\x1b[32m',  // Green
+        WARNING: '\x1b[33m', // Yellow
+        ERROR: '\x1b[31m', // Red
+        RESET: '\x1b[0m',
+      };
 
-    console.log(`${colors[levelName]}${formattedMessage}${colors.RESET}`);
+      console.log(`${colors[levelName]}${formattedMessage}${colors.RESET}`);
+    }
 
-    // File output
+    // Always write to file (for debugging production issues)
     if (logFileStream) {
       logFileStream.write(formattedMessage + '\n');
     }

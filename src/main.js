@@ -102,10 +102,18 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       devTools: !isProduction, // Disable DevTools in production
+      enableRemoteModule: false,
+      sandbox: false, // Required for native modules like 'cap'
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      backgroundThrottling: false, // Keep running in background for packet capture
+      offscreen: false,
     },
     frame: true,
     titleBarStyle: 'default',
     show: false,
+    paintWhenInitiallyHidden: false, // Performance optimization
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
@@ -117,6 +125,13 @@ function createWindow() {
       mainWindow.webContents.openDevTools();
     }
   });
+
+  // Performance optimization: Set zoom factor after load
+  if (isProduction) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow.webContents.setZoomFactor(1.0);
+    });
+  }
 
   // Prevent DevTools from opening in production
   if (isProduction) {
@@ -170,6 +185,7 @@ ipcMain.handle('get-network-interfaces', async () => {
     index,
     name: iface.name,
     description: iface.description,
+    friendlyName: iface.friendlyName,
     addresses: iface.addresses.map(a => a.addr),
   }));
 });
@@ -206,22 +222,20 @@ ipcMain.handle('start-monitoring', async (event, options) => {
       },
       onResultsCallback: (results) => {
         if (mainWindow) {
-          // Serialize results for IPC
-          const serializedResults = results.map(sol => ({
+          // Optimize: Limit results and round numbers to reduce IPC payload
+          // Only send top 100 results (most relevant)
+          const limitedResults = results.slice(0, 100);
+          const serializedResults = limitedResults.map(sol => ({
             modules: sol.modules.map(m => ({
               name: m.name,
-              configId: m.configId,
-              uuid: m.uuid,
-              quality: m.quality,
               parts: m.parts.map(p => ({
-                id: p.id,
                 name: p.name,
                 value: p.value,
               })),
             })),
             attrBreakdown: sol.attrBreakdown,
-            score: sol.score,
-            optimizationScore: sol.optimizationScore,
+            score: Math.round(sol.score * 100) / 100, // Round to 2 decimals
+            optimizationScore: Math.round(sol.optimizationScore * 100) / 100,
           }));
           mainWindow.webContents.send('results-ready', serializedResults);
         }

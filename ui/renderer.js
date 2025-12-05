@@ -141,7 +141,13 @@ function populateNetworkInterfaces() {
   networkInterfaces.forEach((iface, index) => {
     const option = document.createElement('option');
     option.value = iface.name;
-    option.textContent = `${iface.index}: ${iface.description} (${iface.addresses.join(', ')})`;
+    // Use friendly name if available, otherwise fall back to description
+    const displayName = iface.friendlyName || iface.description || iface.name;
+    // Show friendly name with IP address if available
+    const ipAddresses = iface.addresses && iface.addresses.length > 0 
+      ? iface.addresses.join(', ')
+      : '';
+    option.textContent = ipAddresses ? `${displayName} (${ipAddresses})` : displayName;
     if (index === defaultIndex) {
       option.selected = true;
     }
@@ -417,8 +423,8 @@ async function stopMonitoring() {
   updateInstruction('instruction');
 }
 
-// Rescreen modules
-async function rescreenModules() {
+// Rescreen modules (debounced version for frequent calls)
+const debouncedRescreen = debounce(async function() {
   const category = elements.moduleType.value;
   const attributes = [...selectedAttributes];
   const priorityOrderMode = elements.priorityModeCheckbox.checked;
@@ -431,6 +437,24 @@ async function rescreenModules() {
     prioritizedAttrs: priorityOrderMode ? prioritizedAttrs : [],
     priorityOrderMode,
   });
+}, 300);
+
+// Rescreen modules
+async function rescreenModules() {
+  await debouncedRescreen();
+}
+
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 // Apply distribution filter
