@@ -59,7 +59,6 @@
 
 body {
   font-family: var(--font-sans);
-  background: var(--bg-main);
   color: var(--text-primary);
   line-height: 1.5;
   min-height: 100vh;
@@ -191,9 +190,10 @@ body {
 .capture-buttons-container {
   display: flex;
   gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  justify-content: flex-end;
+  /* margin-bottom: var(--space-md);
   padding-top: var(--space-md);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color); */
 }
 
 .filter-group label {
@@ -253,6 +253,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
+  padding-bottom: 1rem;
 }
 
 .pill-btn {
@@ -490,16 +491,17 @@ body {
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-lg);
+  margin-top: var(--space-lg);
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
 /* Results Section */
 .results-section {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  border: 1px solid var(--border-color);
+  /* background: var(--bg-secondary); */
+  /* border-radius: var(--radius-lg); */
+  /* padding: var(--space-lg); */
+  /* border: 1px solid var(--border-color); */
 }
 
 .results-section h2 {
@@ -567,10 +569,10 @@ body {
 }
 
 .module-card {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
+  /* background: var(--bg-secondary); */
+  /* border-radius: var(--radius-sm); */
   padding: var(--space-sm);
-  border: 1px solid var(--border-color);
+  /* border: 1px solid var(--border-color); */
   display: flex;
   gap: 0.5rem;
 }
@@ -599,7 +601,7 @@ body {
   text-align: left;
   font-weight: 500;
   display: flex;
-  gap: 10px;
+  gap: 0.7rem;
   justify-content: center;
 }
 
@@ -637,7 +639,7 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   background: var(--bg-secondary);
   padding: 2px 6px;

@@ -112,6 +112,10 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    // Open DevTools automatically in dev mode
+    if (isDevMode) {
+      mainWindow.webContents.openDevTools();
+    }
   });
 
   // Prevent DevTools from opening in production

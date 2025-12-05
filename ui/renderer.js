@@ -12,7 +12,7 @@ const translations = {
     priorityMode: "Enable Priority Ordering Mode (max 6 attributes)",
     startMonitoring: "Capture Modules",
     stopMonitoring: "Stop Capturing",
-    refilter: "Filter",
+    refilter: "Filter and Optimize",
     instruction: "Before pressing Start, move your character to a location with few players around.",
     waitingModules: "Waiting for modules to be combined...",
     changeChannel: "Change channels in-game to start processing modules.",
@@ -33,7 +33,7 @@ const translations = {
     priorityMode: "Activar Modo de Ordenamiento por Prioridad (máx. 6 atributos)",
     startMonitoring: "Iniciar Captura",
     stopMonitoring: "Detener Captura",
-    refilter: "Filtrar",
+    refilter: "Filtrar y Optimizar",
     instruction: "Antes de presionar Iniciar, mueve tu personaje a un lugar con pocos jugadores.",
     waitingModules: "Esperando a que se optimicen los módulos...",
     changeChannel: "Cambia de canal en el juego para comenzar a procesar módulos.",
@@ -359,8 +359,8 @@ function setupIPCListeners() {
 
   window.electronAPI.onMonitoringStopped(() => {
     // Update UI when monitoring stops automatically
-    elements.startBtn.disabled = false;
-    elements.stopBtn.disabled = true;
+    elements.startBtn.classList.remove('hidden');
+    elements.stopBtn.classList.add('hidden');
     elements.networkInterface.disabled = false;
     setStatus('statusCaptured');
   });
@@ -374,8 +374,8 @@ async function startMonitoring() {
   const priorityOrderMode = elements.priorityModeCheckbox.checked;
 
   setStatus('statusStarting');
-  elements.startBtn.disabled = true;
-  elements.stopBtn.disabled = false;
+  elements.startBtn.classList.add('hidden');
+  elements.stopBtn.classList.remove('hidden');
   elements.refilterBtn.disabled = true;
   elements.networkInterface.disabled = true;
 
@@ -397,8 +397,8 @@ async function startMonitoring() {
     updateInstruction('changeChannel');
   } else {
     alert('Failed to start monitoring: ' + result.error);
-    elements.startBtn.disabled = false;
-    elements.stopBtn.disabled = true;
+    elements.startBtn.classList.remove('hidden');
+    elements.stopBtn.classList.add('hidden');
     elements.networkInterface.disabled = false;
     setStatus('statusIdle');
   }
@@ -408,8 +408,8 @@ async function startMonitoring() {
 async function stopMonitoring() {
   await window.electronAPI.stopMonitoring();
   
-  elements.startBtn.disabled = false;
-  elements.stopBtn.disabled = true;
+  elements.startBtn.classList.remove('hidden');
+  elements.stopBtn.classList.add('hidden');
   elements.networkInterface.disabled = false;
   elements.distributionFilter.classList.add('hidden');
   
