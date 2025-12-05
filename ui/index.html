@@ -130,19 +130,12 @@
             <span data-i18n="noResults">Start monitoring to capture module data.</span>
           </div>
         </div>
-        
-        <!-- Pagination -->
-        <div id="pagination" class="pagination hidden">
-          <button id="prev-page" class="btn btn-small" disabled>← Previous</button>
-          <span id="page-info">Page 1 / 1</span>
-          <button id="next-page" class="btn btn-small" disabled>Next →</button>
-        </div>
       </section>
 
       <!-- Loading Overlay -->
       <div id="loading-overlay" class="loading-overlay hidden">
         <div class="loading-spinner"></div>
-        <span data-i18n="generating">Generating combinations, please wait...</span>
+        <span id="loading-status" data-i18n="generating">Generating combinations, please wait...</span>
       </div>
     </main>
   </div>

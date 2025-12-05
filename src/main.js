@@ -3,19 +3,91 @@
  * BPSR Module Optimizer
  */
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { setupLogging, getLogger } = require('./logger');
 const { getNetworkInterfaces } = require('./networkInterfaceUtil');
 const { StarResonanceMonitor } = require('./starResonanceMonitor');
 const { ModuleCategory, ALL_ATTRIBUTES } = require('./moduleTypes');
 
+// Get app version from package.json
+const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const appVersion = packageJson.version;
+const appName = packageJson.build?.productName || packageJson.name;
+
+// Determine if running in development mode
+const isDevMode = process.argv.includes('--dev');
+const isProduction = app.isPackaged && !isDevMode;
+
 // Initialize logging
-setupLogging({ debugMode: process.argv.includes('--dev') });
+setupLogging({ debugMode: isDevMode });
 const logger = getLogger('Main');
 
 let mainWindow = null;
 let monitor = null;
+
+// Create custom application menu
+function createMenu() {
+  const aboutDialog = () => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'About',
+      message: appName,
+      detail: `Version ${appVersion}\n\n${packageJson.description}\n\nCreated by ${packageJson.author}`,
+      buttons: ['OK'],
+    });
+  };
+
+  const template = [];
+
+  // On macOS, add the app name menu with minimal options
+  if (process.platform === 'darwin') {
+    template.push({
+      label: app.getName(),
+      submenu: [
+        {
+          label: 'About',
+          click: aboutDialog,
+        },
+        { type: 'separator' },
+        { role: 'quit', label: 'Quit' },
+      ],
+    });
+  }
+
+  // File menu (only on Windows/Linux)
+  if (process.platform !== 'darwin') {
+    template.push({
+      label: 'File',
+      submenu: [
+        {
+          label: 'Exit',
+          accelerator: 'Ctrl+Q',
+          click: () => {
+            app.quit();
+          },
+        },
+      ],
+    });
+  }
+
+  // Help menu
+  template.push({
+    label: 'Help',
+    submenu: [
+      {
+        label: 'About',
+        click: aboutDialog,
+        // Hide on macOS since it's in the app menu
+        visible: process.platform !== 'darwin',
+      },
+    ],
+  });
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -29,6 +101,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      devTools: !isProduction, // Disable DevTools in production
     },
     frame: true,
     titleBarStyle: 'default',
@@ -40,6 +113,18 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+
+  // Prevent DevTools from opening in production
+  if (isProduction) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+      if (input.key === 'F12' || 
+          (input.control && input.shift && (input.key === 'I' || input.key === 'J')) ||
+          (input.control && input.key === 'U')) {
+        event.preventDefault();
+      }
+    });
+  }
 
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -55,7 +140,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createMenu();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

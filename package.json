@@ -38,8 +38,8 @@
       "*.png",
       "*.webp",
       "Icons/**/*",
-      "Module-Effects/**/*",
-      "Modulos/**/*"
+      "Attributes/**/*",
+      "Modules/**/*"
     ],
     "win": {
       "target": "portable",

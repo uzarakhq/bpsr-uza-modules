@@ -29,8 +29,8 @@ bpsr-uzamodules/
 │   ├── styles.css           # Modern dark theme styles
 │   └── renderer.js          # Renderer process (UI logic)
 ├── Icons/                   # UI icons
-├── Module-Effects/          # Attribute effect images
-├── Modulos/                  # Module images
+├── Attributes/              # Attribute effect images
+├── Modules/                  # Module images
 ├── package.json             # Node.js dependencies
 └── README_JS.md            # This file
 ```

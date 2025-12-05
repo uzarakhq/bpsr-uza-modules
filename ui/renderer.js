@@ -56,8 +56,6 @@ let prioritizedAttrs = [];
 let networkInterfaces = [];
 let allResults = [];
 let filteredResults = [];
-let currentPage = 0;
-const resultsPerPage = 4;
 let currentDistFilter = 'All';
 
 // DOM Elements
@@ -77,11 +75,8 @@ const elements = {
   distributionFilter: document.getElementById('distribution-filter'),
   statusText: document.getElementById('status-text'),
   resultsContainer: document.getElementById('results-container'),
-  pagination: document.getElementById('pagination'),
-  prevPage: document.getElementById('prev-page'),
-  nextPage: document.getElementById('next-page'),
-  pageInfo: document.getElementById('page-info'),
   loadingOverlay: document.getElementById('loading-overlay'),
+  loadingStatus: document.getElementById('loading-status'),
 };
 
 // Initialize
@@ -159,8 +154,20 @@ function createAttributeButtons() {
   allAttributes.forEach(attr => {
     const btn = document.createElement('button');
     btn.className = 'pill-btn';
-    btn.textContent = attr;
     btn.dataset.attr = attr;
+    
+    // Add attribute image
+    const img = document.createElement('img');
+    img.src = `../Attributes/${attr}.webp`;
+    img.className = 'attr-icon';
+    img.alt = attr;
+    img.onerror = function() { this.style.display = 'none'; };
+    
+    const text = document.createElement('span');
+    text.textContent = attr;
+    
+    btn.appendChild(img);
+    btn.appendChild(text);
     btn.addEventListener('click', () => toggleAttribute(attr, btn));
     elements.attributesContainer.appendChild(btn);
   });
@@ -310,22 +317,6 @@ function setupEventListeners() {
       setDistributionFilter(btn.dataset.filter);
     });
   });
-
-  // Pagination
-  elements.prevPage.addEventListener('click', () => {
-    if (currentPage > 0) {
-      currentPage--;
-      displayCurrentPage();
-    }
-  });
-
-  elements.nextPage.addEventListener('click', () => {
-    const totalPages = Math.ceil(filteredResults.length / resultsPerPage);
-    if (currentPage < totalPages - 1) {
-      currentPage++;
-      displayCurrentPage();
-    }
-  });
 }
 
 // Setup IPC listeners
@@ -339,6 +330,10 @@ function setupIPCListeners() {
 
   window.electronAPI.onProgressUpdate((message) => {
     setStatus('custom', message);
+    // Update loading overlay status if visible
+    if (!elements.loadingOverlay.classList.contains('hidden')) {
+      elements.loadingStatus.textContent = message;
+    }
   });
 
   window.electronAPI.onResultsReady((results) => {
@@ -373,7 +368,6 @@ async function startMonitoring() {
   // Clear previous results
   allResults = [];
   filteredResults = [];
-  currentPage = 0;
   renderEmptyState();
 
   const result = await window.electronAPI.startMonitoring({
@@ -456,32 +450,19 @@ function applyFiltersAndDisplay() {
     });
   }
   
-  currentPage = 0;
   displayCurrentPage();
 }
 
-// Display current page of results
+// Display all results
 function displayCurrentPage() {
   if (filteredResults.length === 0) {
     renderEmptyState();
-    elements.pagination.classList.add('hidden');
     return;
   }
 
-  const totalPages = Math.ceil(filteredResults.length / resultsPerPage);
-  const start = currentPage * resultsPerPage;
-  const end = start + resultsPerPage;
-  const pageResults = filteredResults.slice(start, end);
-
-  elements.resultsContainer.innerHTML = pageResults.map((sol, i) => 
-    renderResultCard(sol, start + i + 1)
+  elements.resultsContainer.innerHTML = filteredResults.map((sol, i) => 
+    renderResultCard(sol, i + 1)
   ).join('');
-
-  // Update pagination
-  elements.pagination.classList.remove('hidden');
-  elements.pageInfo.textContent = `Page ${currentPage + 1} / ${totalPages}`;
-  elements.prevPage.disabled = currentPage === 0;
-  elements.nextPage.disabled = currentPage >= totalPages - 1;
 }
 
 // Render result card
@@ -497,12 +478,15 @@ function renderResultCard(solution, rank) {
     const rarity = module.name.split(' ')[0];
     const rarityClass = rarityColors[rarity] || '';
     const attrsHtml = module.parts.map(part => 
-      `<div class="module-attr-line">${part.name}+${part.value}</div>`
+      `<div class="module-attr-line">
+        <img src="../Attributes/${part.name}.webp" alt="${part.name}" class="module-attr-icon" onerror="this.style.display='none'">
+        <span>+${part.value}</span>
+      </div>`
     ).join('');
     
     // Map module name to image filename (remove "-Preferred" suffix if present)
     const imageName = module.name.replace(/-Preferred$/, '');
-    const imagePath = `../Modulos/${imageName}.webp`;
+    const imagePath = `../Modules/${imageName}.webp`;
     
     return `
       <div class="module-card ${rarityClass}">
@@ -526,15 +510,19 @@ function renderResultCard(solution, rank) {
       else if (value >= 1) level = 1;
       
       const isHighLevel = level >= 5;
-      return `<div class="attr-dist-item ${isHighLevel ? 'high-level' : ''}">${name} (Lv.${level}): +${value}</div>`;
+      return `<div class="attr-dist-item ${isHighLevel ? 'high-level' : ''}">
+        <img src="../Attributes/${name}.webp" alt="${name}" class="attr-dist-icon" onerror="this.style.display='none'">
+        <span>${name} (Lv.${level}): +${value}</span>
+      </div>`;
     }).join('');
 
   return `
     <div class="result-card">
       <div class="result-header">
-        <div>
-          <div class="result-rank">Rank ${rank} (Score: ${solution.optimizationScore.toFixed(2)})</div>
-          <div class="result-stats">Total Attrs: ${totalAttrValue} | Combat Power: ${Math.round(solution.score)}</div>
+        <div class="result-rank">
+          <div>Effects: ${totalAttrValue}</div> 
+          <div>Ability Score: ${Math.round(solution.score)}</div>
+          <div>Rank ${rank} (Score: ${solution.optimizationScore.toFixed(2)})</div>
         </div>
       </div>
       <div class="result-modules">${modulesHtml}</div>
@@ -578,8 +566,14 @@ function setStatus(key, customMessage = '') {
 }
 
 // Show/hide loading
-function showLoading() {
+function showLoading(message = '') {
   elements.loadingOverlay.classList.remove('hidden');
+  if (message) {
+    elements.loadingStatus.textContent = message;
+  } else {
+    const t = translations[currentLanguage];
+    elements.loadingStatus.textContent = t.generating;
+  }
 }
 
 function hideLoading() {

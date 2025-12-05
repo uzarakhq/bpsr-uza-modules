@@ -24,9 +24,9 @@
   --accent-red: #f85149;
   
   /* Rarity colors */
-  --rarity-rare: #4a90d9;
-  --rarity-epic: #a855f7;
-  --rarity-legendary: #f59e0b;
+  --rarity-rare: #27496d;
+  --rarity-epic: #4d3266;
+  --rarity-legendary: #b98a3a;
   
   /* Spacing */
   --space-xs: 4px;
@@ -236,7 +236,11 @@ body {
 }
 
 .pill-btn {
-  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0;
+  padding-right: var(--space-md);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
@@ -246,6 +250,18 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  overflow: hidden;
+}
+
+.pill-btn span {
+  padding: var(--space-sm) 0;
+}
+
+.attr-icon {
+  width: auto;
+  height: 36px;
+  object-fit: cover;
+  display: block;
 }
 
 .pill-btn:hover {
@@ -505,6 +521,10 @@ body {
 }
 
 .result-rank {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
   font-weight: 600;
   color: var(--accent-cyan);
 }
@@ -521,7 +541,7 @@ body {
 
 .result-modules {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-sm);
   margin-bottom: var(--space-md);
 }
@@ -530,23 +550,20 @@ body {
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   padding: var(--space-sm);
-  text-align: center;
   border: 1px solid var(--border-color);
+  display: flex;
+  gap: 0.5rem;
 }
 
-.module-card.rare { border-color: var(--rarity-rare); }
-.module-card.epic { border-color: var(--rarity-epic); }
-.module-card.legendary { border-color: var(--rarity-legendary); }
+.module-card.rare .module-icon { background: linear-gradient(179deg,rgba(0, 0, 0, 1) 0%, var(--rarity-rare) 100%); }
+.module-card.epic .module-icon { background: linear-gradient(179deg,rgba(0, 0, 0, 1) 0%, var(--rarity-epic) 100%); }
+.module-card.legendary .module-icon { background: linear-gradient(179deg,rgba(0, 0, 0, 1) 0%, var(--rarity-legendary) 100%); }
 
 .module-icon {
   width: 48px;
   height: 48px;
-  margin: 0 auto var(--space-xs);
-  background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
   display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
 }
 
@@ -557,9 +574,13 @@ body {
 }
 
 .module-attrs {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
+  font-size: 1rem;
+  color: #c1c1c1;
   text-align: left;
+  font-weight: 500;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 }
 
 .module-attr-line {
@@ -570,8 +591,8 @@ body {
 }
 
 .module-attr-icon {
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
 }
 
 .attr-distribution {
@@ -611,6 +632,7 @@ body {
 .attr-dist-icon {
   width: 14px;
   height: 14px;
+  object-fit: contain;
 }
 
 /* Pagination */
