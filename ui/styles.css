@@ -188,6 +188,14 @@ body {
   gap: var(--space-sm);
 }
 
+.capture-buttons-container {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-color);
+}
+
 .filter-group label {
   color: var(--text-secondary);
   font-size: 0.875rem;
@@ -217,7 +225,11 @@ body {
 
 /* Attributes Section */
 .attributes-section {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
   margin-bottom: var(--space-lg);
+  border: 1px solid var(--border-color);
 }
 
 .attributes-header {
@@ -227,6 +239,14 @@ body {
   margin-bottom: var(--space-md);
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+.filter-button-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-color);
 }
 
 .attributes-grid {

@@ -56,33 +56,7 @@
             </select>
           </div>
         </div>
-
-        <!-- Attribute Buttons -->
-        <div class="attributes-section">
-          <div class="attributes-header">
-            <span data-i18n="selectAttributes">Select Attributes:</span>
-            <button id="select-all-btn" class="pill-btn" data-i18n="all">All</button>
-          </div>
-          <div id="attributes-container" class="attributes-grid">
-            <!-- Attribute buttons will be generated here -->
-          </div>
-        </div>
-
-        <!-- Priority Mode -->
-        <div class="priority-section">
-          <label class="checkbox-label">
-            <input type="checkbox" id="priority-mode-checkbox">
-            <span data-i18n="priorityMode">Enable Priority Ordering Mode (max 6 attributes)</span>
-          </label>
-          <div id="priority-list" class="priority-list hidden">
-            <!-- Priority ordered attributes will be listed here -->
-          </div>
-        </div>
-      </section>
-
-      <!-- Control Buttons -->
-      <div class="controls-row">
-        <div class="control-buttons">
+        <div class="capture-buttons-container">
           <button id="start-btn" class="btn btn-primary">
             <img src="../Icons/play.png" alt="" class="btn-icon">
             <span data-i18n="startMonitoring">Capture Modules</span>
@@ -91,17 +65,15 @@
             <img src="../Icons/stop.png" alt="" class="btn-icon">
             <span data-i18n="stopMonitoring">Stop Capturing</span>
           </button>
-          <button id="refilter-btn" class="btn btn-outline" disabled>
-            <span>🔍</span>
-            <span data-i18n="refilter">Optimize</span>
-          </button>
         </div>
-        <div class="instruction-box" id="instruction-box">
-          <span class="instruction-icon">⚠️</span>
-          <span class="instruction-text" id="instruction-text" data-i18n="instruction">
-            Before pressing Start, move your character to a location with few players around.
-          </span>
-        </div>
+      </section>
+
+      <!-- Instruction Box -->
+      <div class="instruction-box" id="instruction-box">
+        <span class="instruction-icon">⚠️</span>
+        <span class="instruction-text" id="instruction-text" data-i18n="instruction">
+          Before pressing Start, move your character to a location with few players around.
+        </span>
       </div>
 
       <!-- Distribution Filter -->
@@ -120,6 +92,33 @@
       <div class="status-bar">
         <span id="status-text" data-i18n="statusIdle">Status: Idle</span>
       </div>
+
+      <!-- Attribute Buttons Section -->
+      <section class="attributes-section">
+        <div class="attributes-header">
+          <span data-i18n="selectAttributes">Select Attributes:</span>
+          <button id="select-all-btn" class="pill-btn" data-i18n="all">All</button>
+        </div>
+        <div id="attributes-container" class="attributes-grid">
+          <!-- Attribute buttons will be generated here -->
+        </div>
+        <!-- Priority Mode -->
+        <div class="priority-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="priority-mode-checkbox">
+            <span data-i18n="priorityMode">Enable Priority Ordering Mode (max 6 attributes)</span>
+          </label>
+          <div id="priority-list" class="priority-list hidden">
+            <!-- Priority ordered attributes will be listed here -->
+          </div>
+        </div>
+        <div class="filter-button-container">
+          <button id="refilter-btn" class="btn btn-outline" disabled>
+            <span>🔍</span>
+            <span data-i18n="refilter">Filter</span>
+          </button>
+        </div>
+      </section>
 
       <!-- Results Section -->
       <section id="results-section" class="results-section">
