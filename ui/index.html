@@ -55,16 +55,19 @@
               <option value="">Loading...</option>
             </select>
           </div>
-        </div>
-        <div class="capture-buttons-container">
-          <button id="start-btn" class="btn btn-primary">
-            <img src="../Icons/play.png" alt="" class="btn-icon">
-            <span data-i18n="startMonitoring">Capture Modules</span>
-          </button>
-          <button id="stop-btn" class="btn btn-secondary hidden">
-            <img src="../Icons/stop.png" alt="" class="btn-icon">
-            <span data-i18n="stopMonitoring">Stop Capturing</span>
-          </button>
+          <div class="filter-group capture-buttons-container">
+            <label>&nbsp;</label>
+            <div class="capture-buttons-wrapper">
+              <button id="start-btn" class="btn btn-primary">
+                <img src="../Icons/play.png" alt="" class="btn-icon">
+                <span data-i18n="startMonitoring">Capture Modules</span>
+              </button>
+              <button id="stop-btn" class="btn btn-secondary hidden">
+                <img src="../Icons/stop.png" alt="" class="btn-icon">
+                <span data-i18n="stopMonitoring">Stop Capturing</span>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -76,17 +79,6 @@
         </span>
       </div>
 
-      <!-- Distribution Filter -->
-      <div id="distribution-filter" class="distribution-filter hidden">
-        <span data-i18n="attrDistribution">Attr. Distribution:</span>
-        <div class="dist-buttons">
-          <button class="dist-btn active" data-filter="All">All</button>
-          <button class="dist-btn" data-filter="Lv.5">Lv.5</button>
-          <button class="dist-btn" data-filter="Lv.5/Lv.5">Lv.5/Lv.5</button>
-          <button class="dist-btn" data-filter="Lv.5/Lv.6">Lv.5/Lv.6</button>
-          <button class="dist-btn" data-filter="Lv.6/Lv.6">Lv.6/Lv.6</button>
-        </div>
-      </div>
 
       <!-- Status Bar -->
       <div class="status-bar">
@@ -112,6 +104,17 @@
             <!-- Priority ordered attributes will be listed here -->
           </div>
         </div>
+        <!-- Distribution Filter -->
+        <div id="distribution-filter" class="distribution-filter hidden">
+          <span data-i18n="attrDistribution">Attr. Distribution:</span>
+          <div class="dist-buttons">
+            <button class="dist-btn active" data-filter="All">All</button>
+            <button class="dist-btn" data-filter="Lv.5">Lv.5</button>
+            <button class="dist-btn" data-filter="Lv.5/Lv.5">Lv.5/Lv.5</button>
+            <button class="dist-btn" data-filter="Lv.5/Lv.6">Lv.5/Lv.6</button>
+            <button class="dist-btn" data-filter="Lv.6/Lv.6">Lv.6/Lv.6</button>
+          </div>
+        </div>
         <div class="filter-button-container">
           <button id="refilter-btn" class="btn btn-outline" disabled>
             <span>🔍</span>
@@ -122,7 +125,17 @@
 
       <!-- Results Section -->
       <section id="results-section" class="results-section">
-        <h2 data-i18n="combinations">Combinations</h2>
+        <div class="results-header">
+          <h2 data-i18n="combinations">Combinations</h2>
+          <div class="view-toggle">
+            <button id="view-toggle-btn" class="view-toggle-btn active" data-view="grid" title="Grid View">
+              <span>⊞</span>
+            </button>
+            <button id="view-toggle-btn-table" class="view-toggle-btn" data-view="table" title="Table View">
+              <span>☰</span>
+            </button>
+          </div>
+        </div>
         <div id="results-container" class="results-grid">
           <!-- Results will be rendered here -->
           <div class="empty-state">

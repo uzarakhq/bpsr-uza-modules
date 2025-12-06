@@ -72,6 +72,22 @@ function createMenu() {
     });
   }
 
+  // View menu (for DevTools)
+  template.push({
+    label: 'View',
+    submenu: [
+      {
+        label: 'Toggle Developer Tools',
+        accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.webContents.toggleDevTools();
+          }
+        },
+      },
+    ],
+  });
+
   // Help menu
   template.push({
     label: 'Help',
@@ -128,17 +144,24 @@ function createWindow() {
     });
   }
 
-  // Prevent DevTools shortcuts only in production builds (not in dev mode)
-  if (isProduction && !isDevMode) {
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
-      if (input.key === 'F12' || 
-          (input.control && input.shift && (input.key === 'I' || input.key === 'J')) ||
+  // Allow F12 to open DevTools in all modes
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Allow F12 to toggle DevTools
+    if (input.key === 'F12') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+      return;
+    }
+    
+    // Block other DevTools shortcuts only in production builds (not in dev mode)
+    if (isProduction && !isDevMode) {
+      // Block Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+      if ((input.control && input.shift && (input.key === 'I' || input.key === 'J')) ||
           (input.control && input.key === 'U')) {
         event.preventDefault();
       }
-    });
-  }
+    }
+  });
 
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

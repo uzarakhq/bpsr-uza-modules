@@ -57,6 +57,7 @@ let networkInterfaces = [];
 let allResults = [];
 let filteredResults = [];
 let currentDistFilter = 'All';
+let currentViewMode = 'grid'; // 'grid' or 'table'
 
 // Virtual scrolling state
 let virtualScrollObserver = null;
@@ -95,6 +96,8 @@ const elements = {
   npcapModal: document.getElementById('npcap-modal'),
   npcapDownloadBtn: document.getElementById('npcap-download-btn'),
   npcapCloseBtn: document.getElementById('npcap-close-btn'),
+  viewToggleBtn: document.getElementById('view-toggle-btn'),
+  viewToggleBtnTable: document.getElementById('view-toggle-btn-table'),
 };
 
 // Initialize
@@ -118,6 +121,9 @@ async function init() {
 
   // Apply initial language
   applyLanguage(currentLanguage);
+  
+  // Initialize view mode
+  setViewMode('grid');
 }
 
 // Check if Npcap is installed
@@ -409,6 +415,18 @@ function setupEventListeners() {
     });
   });
 
+  // View toggle buttons
+  if (elements.viewToggleBtn) {
+    elements.viewToggleBtn.addEventListener('click', () => {
+      setViewMode('grid');
+    });
+  }
+  if (elements.viewToggleBtnTable) {
+    elements.viewToggleBtnTable.addEventListener('click', () => {
+      setViewMode('table');
+    });
+  }
+
   // Npcap modal buttons
   if (elements.npcapDownloadBtn) {
     elements.npcapDownloadBtn.addEventListener('click', () => {
@@ -579,6 +597,33 @@ function setDistributionFilter(filter) {
   applyFiltersAndDisplay();
 }
 
+// Set view mode
+function setViewMode(mode) {
+  currentViewMode = mode;
+  
+  // Update toggle buttons
+  if (elements.viewToggleBtn) {
+    elements.viewToggleBtn.classList.toggle('active', mode === 'grid');
+  }
+  if (elements.viewToggleBtnTable) {
+    elements.viewToggleBtnTable.classList.toggle('active', mode === 'table');
+  }
+  
+  // Update container class
+  if (elements.resultsContainer) {
+    if (mode === 'grid') {
+      elements.resultsContainer.classList.add('results-grid');
+      elements.resultsContainer.classList.remove('results-table');
+    } else {
+      elements.resultsContainer.classList.add('results-table');
+      elements.resultsContainer.classList.remove('results-grid');
+    }
+  }
+  
+  // Redisplay with new view mode
+  displayCurrentPage();
+}
+
 // Apply filters and redisplay
 function applyFiltersAndDisplay() {
   if (currentDistFilter === 'All') {
@@ -733,43 +778,48 @@ function displayCurrentPage() {
       return;
     }
 
-    // Use virtual scrolling for large result sets (more than 20 items)
-    if (filteredResults.length > 20) {
-      // Clean up previous virtual scroll setup
-      cleanupVirtualScroll();
-      
-      // Initialize virtual scrolling
-      initVirtualScrollObserver();
-      
-      // Reset visible range to start
-      visibleRange.start = 0;
-      visibleRange.end = Math.min(itemsPerView * 2, filteredResults.length);
-      
-      // Set up scroll listener to update visible range
-      scrollHandler = () => {
-        const scrollTop = elements.resultsContainer.scrollTop;
-        const estimatedIndex = Math.floor(scrollTop / (cardHeight || 200));
-        updateVisibleRange(estimatedIndex);
-      };
-      
-      elements.resultsContainer.addEventListener('scroll', scrollHandler, { passive: true });
-      
-      // Initial render
-      renderVisibleItems();
+    // Render based on current view mode
+    if (currentViewMode === 'table') {
+      renderTableView();
     } else {
-      // For small lists, render all items normally
-      cleanupVirtualScroll();
-      
-      const fragment = document.createDocumentFragment();
-      
-      filteredResults.forEach((sol, i) => {
-        const cardElement = createResultCardElement(sol, i + 1);
-        fragment.appendChild(cardElement);
-      });
+      // Use virtual scrolling for large result sets (more than 20 items)
+      if (filteredResults.length > 20) {
+        // Clean up previous virtual scroll setup
+        cleanupVirtualScroll();
+        
+        // Initialize virtual scrolling
+        initVirtualScrollObserver();
+        
+        // Reset visible range to start
+        visibleRange.start = 0;
+        visibleRange.end = Math.min(itemsPerView * 2, filteredResults.length);
+        
+        // Set up scroll listener to update visible range
+        scrollHandler = () => {
+          const scrollTop = elements.resultsContainer.scrollTop;
+          const estimatedIndex = Math.floor(scrollTop / (cardHeight || 200));
+          updateVisibleRange(estimatedIndex);
+        };
+        
+        elements.resultsContainer.addEventListener('scroll', scrollHandler, { passive: true });
+        
+        // Initial render
+        renderVisibleItems();
+      } else {
+        // For small lists, render all items normally
+        cleanupVirtualScroll();
+        
+        const fragment = document.createDocumentFragment();
+        
+        filteredResults.forEach((sol, i) => {
+          const cardElement = createResultCardElement(sol, i + 1);
+          fragment.appendChild(cardElement);
+        });
 
-      // Clear and append in one operation
-      elements.resultsContainer.innerHTML = '';
-      elements.resultsContainer.appendChild(fragment);
+        // Clear and append in one operation
+        elements.resultsContainer.innerHTML = '';
+        elements.resultsContainer.appendChild(fragment);
+      }
     }
   });
 }
@@ -840,7 +890,7 @@ function createResultCardElement(solution, rank) {
   rankDiv.innerHTML = `
     <div>Effects: ${totalAttrValue}</div> 
     <div>Ability Score: ${Math.round(solution.score)}</div>
-    <div>Rank ${rank} (Score: ${solution.optimizationScore.toFixed(2)})</div>
+    <div>Rank ${rank}</div>
   `;
   header.appendChild(rankDiv);
   card.appendChild(header);
@@ -950,6 +1000,125 @@ function renderResultCard(solution, rank) {
   // This is kept for backward compatibility but should use createResultCardElement instead
   const element = createResultCardElement(solution, rank);
   return element.outerHTML;
+}
+
+/**
+ * Render table view of results
+ */
+function renderTableView() {
+  cleanupVirtualScroll();
+  
+  const fragment = document.createDocumentFragment();
+  const table = document.createElement('table');
+  table.className = 'results-table-view';
+  
+  // Create table header
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  
+  const headers = ['Rank', 'Module 1', 'Module 2', 'Module 3', 'Module 4', 'Effects', 'Ability Score'];
+  headers.forEach(headerText => {
+    const th = document.createElement('th');
+    th.textContent = headerText;
+    headerRow.appendChild(th);
+  });
+  
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  
+  // Create table body
+  const tbody = document.createElement('tbody');
+  
+  filteredResults.forEach((sol, i) => {
+    const row = document.createElement('tr');
+    const rank = i + 1;
+    const totalAttrValue = Object.values(sol.attrBreakdown).reduce((a, b) => a + b, 0);
+    
+    // Rank column
+    const rankCell = document.createElement('td');
+    rankCell.className = 'table-rank';
+    rankCell.textContent = rank;
+    row.appendChild(rankCell);
+    
+    // Module columns (1-4)
+    for (let j = 0; j < 4; j++) {
+      const moduleCell = document.createElement('td');
+      moduleCell.className = 'table-module';
+      
+      if (sol.modules[j]) {
+        const module = sol.modules[j];
+        const rarity = module.name.split(' ')[0];
+        const rarityColors = {
+          'Rare': 'rare',
+          'Epic': 'epic',
+          'Legendary': 'legendary',
+        };
+        const rarityClass = rarityColors[rarity] || '';
+        
+        const moduleContainer = document.createElement('div');
+        moduleContainer.className = `table-module-container ${rarityClass}`;
+        
+        const moduleIcon = document.createElement('div');
+        moduleIcon.className = 'table-module-icon';
+        const moduleImg = createOptimizedImage(
+          getModuleImagePath(module.name),
+          module.name,
+          'table-module-image'
+        );
+        moduleIcon.appendChild(moduleImg);
+        moduleContainer.appendChild(moduleIcon);
+        
+        const attrsDiv = document.createElement('div');
+        attrsDiv.className = 'table-module-attrs';
+        
+        // Use DocumentFragment for attribute lines
+        const attrsFragment = document.createDocumentFragment();
+        
+        module.parts.forEach(part => {
+          const attrLine = document.createElement('div');
+          attrLine.className = 'table-module-attr-line';
+          const attrImg = createOptimizedImage(
+            getAttributeImagePath(part.name),
+            part.name,
+            'table-module-attr-icon'
+          );
+          const attrSpan = document.createElement('span');
+          attrSpan.textContent = `+${part.value}`;
+          attrLine.appendChild(attrImg);
+          attrLine.appendChild(attrSpan);
+          attrsFragment.appendChild(attrLine);
+        });
+        
+        attrsDiv.appendChild(attrsFragment);
+        moduleContainer.appendChild(attrsDiv);
+        
+        moduleCell.appendChild(moduleContainer);
+      }
+      
+      row.appendChild(moduleCell);
+    }
+    
+    // Effects column
+    const effectsCell = document.createElement('td');
+    effectsCell.className = 'table-effects';
+    effectsCell.textContent = totalAttrValue;
+    row.appendChild(effectsCell);
+    
+    // Ability Score column
+    const scoreCell = document.createElement('td');
+    scoreCell.className = 'table-score';
+    scoreCell.textContent = Math.round(sol.score);
+    row.appendChild(scoreCell);
+    
+    tbody.appendChild(row);
+  });
+  
+  table.appendChild(tbody);
+  fragment.appendChild(table);
+  
+  // Clear and append in one operation
+  elements.resultsContainer.innerHTML = '';
+  elements.resultsContainer.appendChild(fragment);
 }
 
 // Render empty state
