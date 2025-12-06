@@ -58,6 +58,20 @@ let allResults = [];
 let filteredResults = [];
 let currentDistFilter = 'All';
 
+// Virtual scrolling state
+let virtualScrollObserver = null;
+let visibleRange = { start: 0, end: 0 };
+let cardHeight = 0;
+let containerHeight = 0;
+let itemsPerView = 10; // Number of items to render at once
+let scrollHandler = null;
+
+// Image path cache to avoid repeated string operations
+const imagePathCache = {
+  attributes: new Map(),
+  modules: new Map(),
+};
+
 // DOM Elements
 const elements = {
   languageSelect: document.getElementById('language-select'),
@@ -590,29 +604,219 @@ function applyFiltersAndDisplay() {
   displayCurrentPage();
 }
 
-// Display all results (optimized with DocumentFragment and requestAnimationFrame)
+/**
+ * Initialize virtual scrolling observer
+ * @private
+ */
+function initVirtualScrollObserver() {
+  if (virtualScrollObserver) {
+    virtualScrollObserver.disconnect();
+  }
+
+  // Only use virtual scrolling if we have many results
+  if (filteredResults.length <= 20) {
+    return null;
+  }
+
+  virtualScrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const index = parseInt(entry.target.dataset.index, 10);
+        if (!isNaN(index)) {
+          // Item is visible, ensure it's rendered
+          updateVisibleRange(index);
+        }
+      }
+    });
+  }, {
+    root: elements.resultsContainer,
+    rootMargin: '100px', // Start loading 100px before item comes into view
+    threshold: 0.1
+  });
+
+  return virtualScrollObserver;
+}
+
+/**
+ * Calculate visible range based on scroll position
+ * @private
+ * @param {number} centerIndex - Index to center around
+ */
+function updateVisibleRange(centerIndex) {
+  const newStart = Math.max(0, centerIndex - itemsPerView);
+  const newEnd = Math.min(filteredResults.length, centerIndex + itemsPerView * 2);
+  
+  if (newStart !== visibleRange.start || newEnd !== visibleRange.end) {
+    visibleRange.start = newStart;
+    visibleRange.end = newEnd;
+    renderVisibleItems();
+  }
+}
+
+/**
+ * Render only visible items in the virtual scroll
+ * @private
+ */
+function renderVisibleItems() {
+  requestAnimationFrame(() => {
+    const fragment = document.createDocumentFragment();
+    const placeholderHeight = cardHeight || 200; // Default card height estimate
+    
+    // Add spacer for items before visible range
+    if (visibleRange.start > 0) {
+      const topSpacer = document.createElement('div');
+      topSpacer.style.height = `${visibleRange.start * placeholderHeight}px`;
+      topSpacer.className = 'virtual-scroll-spacer';
+      fragment.appendChild(topSpacer);
+    }
+    
+    // Render visible items
+    for (let i = visibleRange.start; i < visibleRange.end; i++) {
+      const sol = filteredResults[i];
+      const cardElement = createResultCardElement(sol, i + 1);
+      cardElement.dataset.index = i;
+      
+      // Observe this element for visibility
+      if (virtualScrollObserver) {
+        virtualScrollObserver.observe(cardElement);
+      }
+      
+      fragment.appendChild(cardElement);
+    }
+    
+    // Add spacer for items after visible range
+    const remainingItems = filteredResults.length - visibleRange.end;
+    if (remainingItems > 0) {
+      const bottomSpacer = document.createElement('div');
+      bottomSpacer.style.height = `${remainingItems * placeholderHeight}px`;
+      bottomSpacer.className = 'virtual-scroll-spacer';
+      fragment.appendChild(bottomSpacer);
+    }
+    
+    // Clear and append in one operation
+    elements.resultsContainer.innerHTML = '';
+    elements.resultsContainer.appendChild(fragment);
+    
+    // Measure actual card height for better estimates
+    const firstCard = elements.resultsContainer.querySelector('.result-card');
+    if (firstCard && cardHeight === 0) {
+      cardHeight = firstCard.offsetHeight || 200;
+    }
+  });
+}
+
+/**
+ * Clean up virtual scrolling resources
+ * @private
+ */
+function cleanupVirtualScroll() {
+  if (virtualScrollObserver) {
+    virtualScrollObserver.disconnect();
+    virtualScrollObserver = null;
+  }
+  if (scrollHandler) {
+    elements.resultsContainer.removeEventListener('scroll', scrollHandler);
+    scrollHandler = null;
+  }
+  visibleRange = { start: 0, end: 0 };
+  cardHeight = 0;
+}
+
+/**
+ * Display results with virtual scrolling for large lists
+ */
 function displayCurrentPage() {
   requestAnimationFrame(() => {
     if (filteredResults.length === 0) {
       renderEmptyState();
+      cleanupVirtualScroll();
       return;
     }
 
-    // Use DocumentFragment for better performance
-    const fragment = document.createDocumentFragment();
-    
-    filteredResults.forEach((sol, i) => {
-      const cardElement = createResultCardElement(sol, i + 1);
-      fragment.appendChild(cardElement);
-    });
+    // Use virtual scrolling for large result sets (more than 20 items)
+    if (filteredResults.length > 20) {
+      // Clean up previous virtual scroll setup
+      cleanupVirtualScroll();
+      
+      // Initialize virtual scrolling
+      initVirtualScrollObserver();
+      
+      // Reset visible range to start
+      visibleRange.start = 0;
+      visibleRange.end = Math.min(itemsPerView * 2, filteredResults.length);
+      
+      // Set up scroll listener to update visible range
+      scrollHandler = () => {
+        const scrollTop = elements.resultsContainer.scrollTop;
+        const estimatedIndex = Math.floor(scrollTop / (cardHeight || 200));
+        updateVisibleRange(estimatedIndex);
+      };
+      
+      elements.resultsContainer.addEventListener('scroll', scrollHandler, { passive: true });
+      
+      // Initial render
+      renderVisibleItems();
+    } else {
+      // For small lists, render all items normally
+      cleanupVirtualScroll();
+      
+      const fragment = document.createDocumentFragment();
+      
+      filteredResults.forEach((sol, i) => {
+        const cardElement = createResultCardElement(sol, i + 1);
+        fragment.appendChild(cardElement);
+      });
 
-    // Clear and append in one operation
-    elements.resultsContainer.innerHTML = '';
-    elements.resultsContainer.appendChild(fragment);
+      // Clear and append in one operation
+      elements.resultsContainer.innerHTML = '';
+      elements.resultsContainer.appendChild(fragment);
+    }
   });
 }
 
-// Create result card element (optimized with DOM elements and lazy loading)
+/**
+ * Get cached attribute image path
+ * @param {string} attrName - Attribute name
+ * @returns {string} Image path
+ */
+function getAttributeImagePath(attrName) {
+  if (!imagePathCache.attributes.has(attrName)) {
+    imagePathCache.attributes.set(attrName, `../Attributes/${attrName}.webp`);
+  }
+  return imagePathCache.attributes.get(attrName);
+}
+
+/**
+ * Get cached module image path
+ * @param {string} moduleName - Module name
+ * @returns {string} Image path
+ */
+function getModuleImagePath(moduleName) {
+  if (!imagePathCache.modules.has(moduleName)) {
+    const imageName = moduleName.replace(/-Preferred$/, '');
+    imagePathCache.modules.set(moduleName, `../Modules/${imageName}.webp`);
+  }
+  return imagePathCache.modules.get(moduleName);
+}
+
+/**
+ * Create image element with optimized settings
+ * @param {string} src - Image source path
+ * @param {string} alt - Alt text
+ * @param {string} className - CSS class name
+ * @returns {HTMLImageElement} Image element
+ */
+function createOptimizedImage(src, alt, className) {
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = alt;
+  img.className = className;
+  img.loading = 'lazy';
+  img.onerror = function() { this.style.display = 'none'; };
+  return img;
+}
+
+// Create result card element (optimized with DocumentFragment and cached paths)
 function createResultCardElement(solution, rank) {
   const totalAttrValue = Object.values(solution.attrBreakdown).reduce((a, b) => a + b, 0);
   const rarityColors = {
@@ -620,6 +824,9 @@ function createResultCardElement(solution, rank) {
     'Epic': 'epic',
     'Legendary': 'legendary',
   };
+
+  // Use DocumentFragment for better performance
+  const fragment = document.createDocumentFragment();
 
   // Create main card element
   const card = document.createElement('div');
@@ -642,6 +849,9 @@ function createResultCardElement(solution, rank) {
   const modulesContainer = document.createElement('div');
   modulesContainer.className = 'result-modules';
   
+  // Use DocumentFragment for module cards
+  const modulesFragment = document.createDocumentFragment();
+  
   solution.modules.forEach(module => {
     const rarity = module.name.split(' ')[0];
     const rarityClass = rarityColors[rarity] || '';
@@ -651,36 +861,41 @@ function createResultCardElement(solution, rank) {
     
     const moduleIcon = document.createElement('div');
     moduleIcon.className = 'module-icon';
-    const moduleImg = document.createElement('img');
-    const imageName = module.name.replace(/-Preferred$/, '');
-    moduleImg.src = `../Modules/${imageName}.webp`;
-    moduleImg.alt = module.name;
-    moduleImg.className = 'module-image';
-    moduleImg.loading = 'lazy'; // Lazy load images
-    moduleImg.onerror = function() { this.style.display = 'none'; };
+    const moduleImg = createOptimizedImage(
+      getModuleImagePath(module.name),
+      module.name,
+      'module-image'
+    );
     moduleIcon.appendChild(moduleImg);
     moduleCard.appendChild(moduleIcon);
     
     const attrsDiv = document.createElement('div');
     attrsDiv.className = 'module-attrs';
+    
+    // Use DocumentFragment for attribute lines
+    const attrsFragment = document.createDocumentFragment();
+    
     module.parts.forEach(part => {
       const attrLine = document.createElement('div');
       attrLine.className = 'module-attr-line';
-      const attrImg = document.createElement('img');
-      attrImg.src = `../Attributes/${part.name}.webp`;
-      attrImg.alt = part.name;
-      attrImg.className = 'module-attr-icon';
-      attrImg.loading = 'lazy'; // Lazy load images
-      attrImg.onerror = function() { this.style.display = 'none'; };
+      const attrImg = createOptimizedImage(
+        getAttributeImagePath(part.name),
+        part.name,
+        'module-attr-icon'
+      );
       const attrSpan = document.createElement('span');
       attrSpan.textContent = `+${part.value}`;
       attrLine.appendChild(attrImg);
       attrLine.appendChild(attrSpan);
-      attrsDiv.appendChild(attrLine);
+      attrsFragment.appendChild(attrLine);
     });
+    
+    attrsDiv.appendChild(attrsFragment);
     moduleCard.appendChild(attrsDiv);
-    modulesContainer.appendChild(moduleCard);
+    modulesFragment.appendChild(moduleCard);
   });
+  
+  modulesContainer.appendChild(modulesFragment);
   card.appendChild(modulesContainer);
 
   // Create attribute distribution
@@ -693,6 +908,9 @@ function createResultCardElement(solution, rank) {
   
   const attrList = document.createElement('div');
   attrList.className = 'attr-distribution-list';
+  
+  // Use DocumentFragment for attribute distribution items
+  const attrDistFragment = document.createDocumentFragment();
   
   Object.entries(solution.attrBreakdown)
     .sort((a, b) => b[1] - a[1])
@@ -708,19 +926,19 @@ function createResultCardElement(solution, rank) {
       const isHighLevel = level >= 5;
       const item = document.createElement('div');
       item.className = `attr-dist-item ${isHighLevel ? 'high-level' : ''}`;
-      const distImg = document.createElement('img');
-      distImg.src = `../Attributes/${name}.webp`;
-      distImg.alt = name;
-      distImg.className = 'attr-dist-icon';
-      distImg.loading = 'lazy'; // Lazy load images
-      distImg.onerror = function() { this.style.display = 'none'; };
+      const distImg = createOptimizedImage(
+        getAttributeImagePath(name),
+        name,
+        'attr-dist-icon'
+      );
       const distSpan = document.createElement('span');
       distSpan.textContent = `${name} (Lv.${level}): +${value}`;
       item.appendChild(distImg);
       item.appendChild(distSpan);
-      attrList.appendChild(item);
+      attrDistFragment.appendChild(item);
     });
   
+  attrList.appendChild(attrDistFragment);
   attrDist.appendChild(attrList);
   card.appendChild(attrDist);
 
