@@ -268,12 +268,14 @@ class PacketCapture {
   }
 
   /**
-   * Process TCP stream data
+   * Identify and cache server if not already identified
+   * @private
+   * @param {string} srcServer - Source server identifier
+   * @param {number} seq - TCP sequence number
+   * @param {Buffer} payload - Packet payload
+   * @returns {boolean} True if server was identified or already known
    */
-  _processTcpStream(srcServer, seq, payload) {
-    // Convert seq to unsigned 32-bit (handle JavaScript signed number issue)
-    seq = seq >>> 0;
-    
+  _identifyAndCacheServer(srcServer, seq, payload) {
     // Server identification logic
     if (this.currentServer !== srcServer) {
       if (this._identifyGameServer(payload)) {
@@ -282,20 +284,63 @@ class PacketCapture {
         this._clearTcpCache();
         // Use unsigned 32-bit arithmetic: (seq + payload.length) >>> 0
         this.tcpNextSeq = ((seq + payload.length) >>> 0);
+        return true;
       } else {
-        return; // Not game server, skip
+        return false; // Not game server, skip
       }
+    }
+    return true; // Server already identified
+  }
+
+  /**
+   * Reassemble TCP stream from cached packets
+   * @private
+   */
+  _reassembleTcpStream() {
+    // TCP stream reassembly
+    if (this.tcpNextSeq === -1) {
+      logger.error('TCP stream reassembly error: tcpNextSeq is -1');
+      return false;
+    }
+
+    // Ensure tcpNextSeq is unsigned 32-bit
+    this.tcpNextSeq = this.tcpNextSeq >>> 0;
+
+    // Process packets in order
+    while (this.tcpCache.has(this.tcpNextSeq)) {
+      const currentSeq = this.tcpNextSeq;
+      const cachedData = this.tcpCache.get(currentSeq);
+      this._data = Buffer.concat([this._data, cachedData]);
+      this.tcpNextSeq = ((currentSeq + cachedData.length) >>> 0);
+      this.tcpCache.delete(currentSeq);
+      this.tcpLastTime = Date.now();
+    }
+
+    return true;
+  }
+
+  /**
+   * Process TCP stream data
+   * @private
+   */
+  _processTcpStream(srcServer, seq, payload) {
+    // Convert seq to unsigned 32-bit (handle JavaScript signed number issue)
+    seq = seq >>> 0;
+    
+    // Identify and cache server if needed
+    if (!this._identifyAndCacheServer(srcServer, seq, payload)) {
+      return; // Not game server, skip
     }
 
     if (!this.currentServer) return;
 
-    // TCP stream reassembly
+    // Handle initial sequence number if not set
     if (this.tcpNextSeq === -1) {
-      logger.error('TCP stream reassembly error: tcpNextSeq is -1');
       if (payload.length > 4 && payload.readUInt32BE(0) < 0x0fffff) {
         this.tcpNextSeq = seq;
+      } else {
+        return;
       }
-      return;
     }
 
     // Ensure tcpNextSeq is unsigned 32-bit
@@ -312,15 +357,8 @@ class PacketCapture {
       this.tcpCache.set(seq, payload);
     }
 
-    // Process packets in order
-    while (this.tcpCache.has(this.tcpNextSeq)) {
-      const currentSeq = this.tcpNextSeq;
-      const cachedData = this.tcpCache.get(currentSeq);
-      this._data = Buffer.concat([this._data, cachedData]);
-      this.tcpNextSeq = ((currentSeq + cachedData.length) >>> 0);
-      this.tcpCache.delete(currentSeq);
-      this.tcpLastTime = Date.now();
-    }
+    // Reassemble TCP stream
+    this._reassembleTcpStream();
 
     // Process complete packets (async, but don't await to avoid blocking)
     this._processCompletePackets().catch(err => {
@@ -397,31 +435,43 @@ class PacketCapture {
   }
 
   /**
+   * Process parsed packet data
+   * @private
+   * @param {Object} parsedData - Parsed packet data
+   */
+  _processPacket(parsedData) {
+    if (!parsedData) {
+      return;
+    }
+
+    this.syncContainerCount++;
+    // Found SyncContainerData packet
+
+    if (this.callback) {
+      // Callback may be async, handle it properly
+      const result = this.callback(parsedData);
+      // If it returns a promise and fails, log the error
+      if (result && typeof result.catch === 'function') {
+        result.catch(err => {
+          logger.error(`Callback error: ${err.message}`);
+        });
+      }
+    }
+  }
+
+  /**
    * Analyze packet payload
+   * @private
    */
   async _analyzePayload(payload) {
     if (payload.length < 4) return;
 
     try {
       const parsedData = await this._parseSyncContainerData(payload);
-      if (parsedData) {
-        this.syncContainerCount++;
-        // Found SyncContainerData packet
-
-        if (this.callback) {
-          // Callback may be async, handle it properly
-          const result = this.callback(parsedData);
-          // If it returns a promise and fails, log the error
-          if (result && typeof result.catch === 'function') {
-            result.catch(err => {
-              logger.error(`Callback error: ${err.message}`);
-            });
-          }
-        }
-      }
-      } catch (err) {
-        // Failed to parse packet
-      }
+      this._processPacket(parsedData);
+    } catch (err) {
+      // Failed to parse packet
+    }
   }
 
   /**

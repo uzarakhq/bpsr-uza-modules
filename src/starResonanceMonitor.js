@@ -104,6 +104,99 @@ class StarResonanceMonitor {
   }
 
   /**
+   * Parse raw protobuf data
+   * @private
+   * @param {Buffer} vData - Raw protobuf buffer
+   * @returns {Array<ModuleInfo>|null} Parsed modules or null on failure
+   */
+  _parseRawProtobufData(vData) {
+    if (this.progressCallback) {
+      this.progressCallback("Parsing module data...");
+    }
+    
+    const parsedData = this._parseProtobuf(vData);
+    
+    if (parsedData && parsedData.modules && parsedData.modules.length > 0) {
+      return parsedData.modules;
+    } else {
+      const errorMsg = "No modules found in packet. Try changing channels or re-logging.";
+      logger.warn(errorMsg);
+      if (this.progressCallback) {
+        this.progressCallback(errorMsg);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Parse object data using ModuleParser
+   * @private
+   * @param {Object} vData - Parsed object data
+   * @returns {Array<ModuleInfo>|null} Parsed modules or null on failure
+   */
+  _parseObjectData(vData) {
+    try {
+      return this.moduleParser.parseModuleInfo(vData);
+    } catch (parseErr) {
+      logger.error(`ModuleParser failed: ${parseErr.message}`);
+      if (this.progressCallback) {
+        this.progressCallback(`Parse error: ${parseErr.message}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Accumulate modules, avoiding duplicates and triggering callbacks
+   * @private
+   * @param {Array<ModuleInfo>} allModules - Modules to accumulate
+   */
+  _accumulateModules(allModules) {
+    if (allModules.length === 0) {
+      const errorMsg = "No modules extracted from packet. Try changing channels or re-logging.";
+      logger.warn(errorMsg);
+      if (this.progressCallback) {
+        this.progressCallback(errorMsg);
+      }
+      return;
+    }
+
+    // Accumulate modules instead of replacing
+    if (this.capturedModules === null) {
+      this.capturedModules = [];
+    }
+    
+    // Add new modules, avoiding duplicates by UUID
+    const existingUuids = new Set(this.capturedModules.map(m => m.uuid));
+    const newModules = allModules.filter(m => !existingUuids.has(m.uuid));
+    
+    if (newModules.length > 0) {
+      this.capturedModules.push(...newModules);
+
+      // Notify GUI that data is captured
+      if (this.onDataCapturedCallback) {
+        this.onDataCapturedCallback();
+      }
+
+      // Auto-stop capture after successfully getting modules
+      this.stopMonitoring();
+      
+      // Auto-run optimization
+      if (this.progressCallback) {
+        this.progressCallback("Optimizing module combinations...");
+      }
+      this.rescreenModules(
+        this.initialCategory,
+        this.initialAttributes,
+        this.initialPrioritizedAttrs,
+        this.initialPriorityOrderMode
+      );
+    } else {
+      logger.warn("No new modules (all duplicates)");
+    }
+  }
+
+  /**
    * Handle SyncContainerData callback
    * @private
    */
@@ -132,31 +225,14 @@ class StarResonanceMonitor {
       
       // If raw protobuf data, we need to parse it first
       if (data.raw && Buffer.isBuffer(vData)) {
-        if (this.progressCallback) {
-          this.progressCallback("Parsing module data...");
-        }
-        
-        const parsedData = this._parseProtobuf(vData);
-        
-        if (parsedData && parsedData.modules && parsedData.modules.length > 0) {
-          allModules = parsedData.modules;
-        } else {
-          const errorMsg = "No modules found in packet. Try changing channels or re-logging.";
-          logger.warn(errorMsg);
-          if (this.progressCallback) {
-            this.progressCallback(errorMsg);
-          }
+        allModules = this._parseRawProtobufData(vData);
+        if (!allModules) {
           return;
         }
       } else if (typeof vData === 'object' && vData !== null) {
         // Already parsed object
-        try {
-          allModules = this.moduleParser.parseModuleInfo(vData);
-        } catch (parseErr) {
-          logger.error(`ModuleParser failed: ${parseErr.message}`);
-          if (this.progressCallback) {
-            this.progressCallback(`Parse error: ${parseErr.message}`);
-          }
+        allModules = this._parseObjectData(vData);
+        if (!allModules) {
           return;
         }
       } else {
@@ -164,47 +240,7 @@ class StarResonanceMonitor {
         return;
       }
 
-      if (allModules.length > 0) {
-        // Accumulate modules instead of replacing
-        if (this.capturedModules === null) {
-          this.capturedModules = [];
-        }
-        
-        // Add new modules, avoiding duplicates by UUID
-        const existingUuids = new Set(this.capturedModules.map(m => m.uuid));
-        const newModules = allModules.filter(m => !existingUuids.has(m.uuid));
-        
-        if (newModules.length > 0) {
-          this.capturedModules.push(...newModules);
-
-          // Notify GUI that data is captured
-          if (this.onDataCapturedCallback) {
-            this.onDataCapturedCallback();
-          }
-
-          // Auto-stop capture after successfully getting modules
-          this.stopMonitoring();
-          
-          // Auto-run optimization
-          if (this.progressCallback) {
-            this.progressCallback("Optimizing module combinations...");
-          }
-          this.rescreenModules(
-            this.initialCategory,
-            this.initialAttributes,
-            this.initialPrioritizedAttrs,
-            this.initialPriorityOrderMode
-          );
-        } else {
-          logger.warn("No new modules (all duplicates)");
-        }
-      } else {
-        const errorMsg = "No modules extracted from packet. Try changing channels or re-logging.";
-        logger.warn(errorMsg);
-        if (this.progressCallback) {
-          this.progressCallback(errorMsg);
-        }
-      }
+      this._accumulateModules(allModules);
     } catch (err) {
       logger.error(`Failed to process data packet: ${err.message}`);
       logger.error(err.stack);
@@ -212,6 +248,77 @@ class StarResonanceMonitor {
         this.progressCallback(`Error: ${err.message}`);
       }
     }
+  }
+
+  /**
+   * Try parsing as SyncContainerData
+   * @private
+   * @param {Buffer} buffer - Buffer to parse
+   * @returns {Object|null} Parsed result or null
+   */
+  _trySyncContainerData(buffer) {
+    try {
+      const syncData = SyncContainerData.decode(buffer);
+      if (syncData && syncData.VData) {
+        const result = this._extractModulesFromCharSerialize(syncData.VData);
+        if (result && result.modules && result.modules.length > 0) {
+          return result;
+        }
+      }
+    } catch (err) {
+      // Try next method
+    }
+    return null;
+  }
+
+  /**
+   * Try parsing as CharSerialize directly
+   * @private
+   * @param {Buffer} buffer - Buffer to parse
+   * @returns {Object|null} Parsed result or null
+   */
+  _tryCharSerialize(buffer) {
+    try {
+      const charData = CharSerialize.decode(buffer);
+      if (charData) {
+        const result = this._extractModulesFromCharSerialize(charData);
+        if (result && result.modules && result.modules.length > 0) {
+          return result;
+        }
+      }
+    } catch (err) {
+      // Try next method
+    }
+    return null;
+  }
+
+  /**
+   * Try parsing with length prefix skipped
+   * @private
+   * @param {Buffer} buffer - Buffer to parse
+   * @returns {Object|null} Parsed result or null
+   */
+  _tryLengthPrefixed(buffer) {
+    if (buffer.length <= 4) {
+      return null;
+    }
+
+    const possibleLen = buffer.readUInt32BE(0);
+    if (possibleLen > 0 && possibleLen < buffer.length && possibleLen < 10 * 1024 * 1024) {
+      const subBuffer = buffer.slice(4);
+      try {
+        const syncData = SyncContainerData.decode(subBuffer);
+        if (syncData && syncData.VData) {
+          const result = this._extractModulesFromCharSerialize(syncData.VData);
+          if (result && result.modules && result.modules.length > 0) {
+            return result;
+          }
+        }
+      } catch (err) {
+        // Continue to fallback
+      }
+    }
+    return null;
   }
 
   /**
@@ -226,60 +333,31 @@ class StarResonanceMonitor {
     }
     
     // Try proper protobuf parsing first
+    let result = this._trySyncContainerData(buffer);
+    if (result) {
+      return result;
+    }
+
+    result = this._tryCharSerialize(buffer);
+    if (result) {
+      return result;
+    }
+    
+    // The protobuf data might have a length prefix - try skipping it
+    result = this._tryLengthPrefixed(buffer);
+    if (result) {
+      return result;
+    }
+
+    // Fallback: scan for module data patterns (heuristic)
     try {
-      // Try to parse as SyncContainerData
-          const syncData = SyncContainerData.decode(buffer);
-          if (syncData && syncData.VData) {
-            const result = this._extractModulesFromCharSerialize(syncData.VData);
-            if (result && result.modules && result.modules.length > 0) {
-              return result;
-            }
-          }
-        } catch (err) {
-          // Try next method
-        }
-
-        try {
-          // Try to parse as CharSerialize directly
-          const charData = CharSerialize.decode(buffer);
-          if (charData) {
-            const result = this._extractModulesFromCharSerialize(charData);
-            if (result && result.modules && result.modules.length > 0) {
-              return result;
-            }
-          }
-        } catch (err) {
-          // Try next method
-        }
-        
-        // The protobuf data might have a length prefix - try skipping it
-        if (buffer.length > 4) {
-          const possibleLen = buffer.readUInt32BE(0);
-          if (possibleLen > 0 && possibleLen < buffer.length && possibleLen < 10 * 1024 * 1024) {
-            const subBuffer = buffer.slice(4);
-            try {
-              const syncData = SyncContainerData.decode(subBuffer);
-              if (syncData && syncData.VData) {
-                const result = this._extractModulesFromCharSerialize(syncData.VData);
-                if (result && result.modules && result.modules.length > 0) {
-                  return result;
-                }
-              }
-            } catch (err) {
-              // Continue to fallback
-            }
-          }
-        }
-
-        // Fallback: scan for module data patterns (heuristic)
-        try {
-          const modules = this._parseModulesFromWireFormat(buffer);
-          if (modules && modules.length > 0) {
-            return { modules };
-          }
-        } catch (err) {
-          // All methods failed
-        }
+      const modules = this._parseModulesFromWireFormat(buffer);
+      if (modules && modules.length > 0) {
+        return { modules };
+      }
+    } catch (err) {
+      // All methods failed
+    }
     
     logger.error('All parsing methods failed. Packet may not contain module data.');
     return null;
