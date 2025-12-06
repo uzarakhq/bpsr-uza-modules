@@ -70,7 +70,15 @@ class StarResonanceMonitor {
    * Start monitoring
    */
   startMonitoring() {
+    // Clear previous captured modules to free memory
+    this.capturedModules = null;
+    
     this.isRunning = true;
+
+    // Log memory usage in development mode
+    if (process.env.NODE_ENV !== 'production') {
+      this._logMemoryUsage('Before starting monitoring');
+    }
 
     this.packetCapture.startCapture(
       this._onSyncContainerData.bind(this),
@@ -100,6 +108,35 @@ class StarResonanceMonitor {
   _onStatusUpdate(status) {
     if (this.progressCallback) {
       this.progressCallback(status);
+    }
+  }
+
+  /**
+   * Log memory usage (development mode only)
+   * @private
+   */
+  _logMemoryUsage(context = '') {
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+
+    try {
+      const usage = process.memoryUsage();
+      const formatBytes = (bytes) => {
+        return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+      };
+
+      logger.debug(`Memory usage ${context}:`);
+      logger.debug(`  RSS: ${formatBytes(usage.rss)}`);
+      logger.debug(`  Heap Used: ${formatBytes(usage.heapUsed)}`);
+      logger.debug(`  Heap Total: ${formatBytes(usage.heapTotal)}`);
+      logger.debug(`  External: ${formatBytes(usage.external)}`);
+      
+      if (this.capturedModules) {
+        logger.debug(`  Captured Modules: ${this.capturedModules.length}`);
+      }
+    } catch (err) {
+      // Memory usage logging failed, ignore
     }
   }
 
@@ -241,6 +278,11 @@ class StarResonanceMonitor {
       }
 
       this._accumulateModules(allModules);
+      
+      // Log memory usage after capturing modules (development mode)
+      if (process.env.NODE_ENV !== 'production') {
+        this._logMemoryUsage('After capturing modules');
+      }
     } catch (err) {
       logger.error(`Failed to process data packet: ${err.message}`);
       logger.error(err.stack);

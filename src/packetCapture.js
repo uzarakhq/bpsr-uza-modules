@@ -111,11 +111,16 @@ class PacketCapture {
     this.lastStatusTime = 0;
     
     this.currentServer = '';
+    // TCP cache with LRU eviction - stores {seq: {payload, lastAccess}}
     this.tcpCache = new Map();
     this.tcpNextSeq = -1;
     this.tcpLastTime = 0;
     this._data = Buffer.alloc(0);
     this.serverIdentifiedTime = 0;
+
+    // Memory management settings
+    this.maxCacheSize = 1000; // Maximum number of cached packets
+    this.maxDataBufferSize = 10 * 1024 * 1024; // 10MB max for _data buffer
 
     this.moduleParser = new ModuleParser();
     this.cap = null;
@@ -214,7 +219,7 @@ class PacketCapture {
   }
 
   /**
-   * Stop packet capture
+   * Stop packet capture and clean up all resources
    */
   stopCapture() {
     this.isRunning = false;
@@ -238,7 +243,24 @@ class PacketCapture {
       this.statusInterval = null;
     }
 
-    // Packet capture stopped
+    // Explicitly clear all state to free memory
+    this._clearTcpCache();
+    this._data = Buffer.alloc(0); // Clear data buffer
+    this.currentServer = ''; // Clear server state
+    this.packetCount = 0;
+    this.syncContainerCount = 0;
+    this.tcpNextSeq = -1;
+    this.tcpLastTime = 0;
+    this.serverIdentifiedTime = 0;
+
+    // Force garbage collection hint in development mode
+    if (process.env.NODE_ENV !== 'production' && global.gc) {
+      try {
+        global.gc();
+      } catch (err) {
+        // GC not available or failed
+      }
+    }
   }
 
   /**
@@ -293,6 +315,29 @@ class PacketCapture {
   }
 
   /**
+   * Evict oldest cache entry (LRU policy)
+   * @private
+   */
+  _evictOldestCacheEntry() {
+    if (this.tcpCache.size === 0) return;
+    
+    let oldestSeq = null;
+    let oldestTime = Infinity;
+    
+    // Find the least recently used entry
+    for (const [seq, entry] of this.tcpCache.entries()) {
+      if (entry.lastAccess < oldestTime) {
+        oldestTime = entry.lastAccess;
+        oldestSeq = seq;
+      }
+    }
+    
+    if (oldestSeq !== null) {
+      this.tcpCache.delete(oldestSeq);
+    }
+  }
+
+  /**
    * Reassemble TCP stream from cached packets
    * @private
    */
@@ -309,7 +354,18 @@ class PacketCapture {
     // Process packets in order
     while (this.tcpCache.has(this.tcpNextSeq)) {
       const currentSeq = this.tcpNextSeq;
-      const cachedData = this.tcpCache.get(currentSeq);
+      const cacheEntry = this.tcpCache.get(currentSeq);
+      const cachedData = cacheEntry.payload;
+      
+      // Check data buffer size limit
+      if (this._data.length + cachedData.length > this.maxDataBufferSize) {
+        logger.warn(`Data buffer size limit reached (${this.maxDataBufferSize} bytes). Clearing buffer.`);
+        this._data = Buffer.alloc(0);
+        // Clear cache to prevent further accumulation
+        this.tcpCache.clear();
+        break;
+      }
+      
       this._data = Buffer.concat([this._data, cachedData]);
       this.tcpNextSeq = ((currentSeq + cachedData.length) >>> 0);
       this.tcpCache.delete(currentSeq);
@@ -354,7 +410,16 @@ class PacketCapture {
                         (this.tcpNextSeq > 0x7fffffff && seq < 0x80000000); // Handle wrap-around
     
     if (shouldCache) {
-      this.tcpCache.set(seq, payload);
+      // Enforce cache size limit with LRU eviction
+      if (this.tcpCache.size >= this.maxCacheSize) {
+        this._evictOldestCacheEntry();
+      }
+      
+      // Store with access time for LRU tracking
+      this.tcpCache.set(seq, {
+        payload: payload,
+        lastAccess: Date.now()
+      });
     }
 
     // Reassemble TCP stream
@@ -400,13 +465,19 @@ class PacketCapture {
   }
 
   /**
-   * Clear TCP cache
+   * Clear TCP cache and free memory
    */
   _clearTcpCache() {
+    // Explicitly nullify payloads to help GC
+    for (const entry of this.tcpCache.values()) {
+      if (entry && entry.payload) {
+        entry.payload = null;
+      }
+    }
+    this.tcpCache.clear();
     this._data = Buffer.alloc(0);
     this.tcpNextSeq = -1;
     this.tcpLastTime = 0;
-    this.tcpCache.clear();
   }
 
   /**
@@ -656,23 +727,64 @@ class PacketCapture {
   }
 
   /**
-   * Cleanup expired cache entries
+   * Cleanup expired cache entries and old data buffers
    */
   _cleanupExpiredCache() {
     const FRAGMENT_TIMEOUT = 30000; // 30 seconds
+    const CACHE_ENTRY_TIMEOUT = 60000; // 60 seconds for individual cache entries
     const currentTime = Date.now();
 
-    // Clear expired TCP cache
+    // Clear expired TCP cache entries (LRU cleanup)
+    let cleanedCount = 0;
+    for (const [seq, entry] of this.tcpCache.entries()) {
+      if (currentTime - entry.lastAccess > CACHE_ENTRY_TIMEOUT) {
+        this.tcpCache.delete(seq);
+        cleanedCount++;
+      }
+    }
+    
+    if (cleanedCount > 0) {
+      logger.debug(`Cleaned ${cleanedCount} expired TCP cache entries`);
+    }
+
+    // Clear expired TCP cache if stream is stale
     if (this.tcpLastTime && currentTime - this.tcpLastTime > FRAGMENT_TIMEOUT) {
       const expiredCount = this.tcpCache.size;
       if (expiredCount > 0) {
+        // Clear old data buffers before clearing cache
+        for (const entry of this.tcpCache.values()) {
+          // Explicitly nullify payload to help GC
+          entry.payload = null;
+        }
         this.tcpCache.clear();
-        // Cleaned expired TCP cache entries
+        logger.debug(`Cleaned ${expiredCount} expired TCP cache entries due to stale stream`);
+      }
+
+      // Clear large data buffer if it's been stale
+      if (this._data.length > 1024 * 1024) { // If buffer > 1MB
+        const oldSize = this._data.length;
+        this._data = Buffer.alloc(0);
+        logger.debug(`Cleared large stale data buffer (${oldSize} bytes)`);
       }
 
       logger.warn('Cannot capture next packet! Game may be closed or disconnected? seq: ' + this.tcpNextSeq);
       this.currentServer = '';
       this._clearTcpCache();
+    }
+
+    // Force garbage collection hint for large buffers in development mode
+    if (process.env.NODE_ENV !== 'production' && global.gc) {
+      const totalCacheSize = Array.from(this.tcpCache.values())
+        .reduce((sum, entry) => sum + (entry.payload ? entry.payload.length : 0), 0);
+      
+      if (totalCacheSize > 5 * 1024 * 1024 || this._data.length > 5 * 1024 * 1024) {
+        // Large buffers detected, suggest GC
+        try {
+          global.gc();
+        } catch (err) {
+          // GC not available or failed
+        }
+      }
     }
   }
 
