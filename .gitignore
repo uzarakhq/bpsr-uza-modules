@@ -41,3 +41,10 @@ Output/
 npcap-1.83.exe
 BPSR Module Optimizer.spec
 RELEASE_NOTES.md
+
+# Code signing certificates (NEVER commit these!)
+certificate.pfx
+certificate-password.txt
+*.pfx
+*.p12
+*.key

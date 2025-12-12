@@ -308,6 +308,7 @@ function deepCopy(solution) {
 class ModuleOptimizer {
   constructor() {
     this.logger = logger;
+    // Reduce parameters for better performance
     this.gaParams = {
       populationSize: 150,
       generations: 50,
@@ -317,7 +318,8 @@ class ModuleOptimizer {
       tournamentSize: 5,
       localSearchRate: 0.3,
     };
-    this.numCampaigns = Math.max(1, os.cpus().length - 1);
+    // Reduce number of campaigns based on CPU cores
+    this.numCampaigns = Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2)));
     this.qualityThreshold = 12;
     this.prefilterTopNPerAttr = 60;
     this.prefilterTopNTotalValue = 100;
@@ -511,10 +513,20 @@ class ModuleOptimizer {
     const allBestSolutions = [];
     if (progressCallback) progressCallback(`Running ${this.numCampaigns} optimization tasks...`);
 
-    // Execute campaigns sequentially
+    // Execute campaigns with yielding
     for (let i = 0; i < this.numCampaigns; i++) {
       try {
-        const results = runSingleGaCampaign(workingPool, category, prioritizedAttrs, this.gaParams);
+        // Use setImmediate to yield before starting heavy work
+        await yieldToEventLoop();
+        
+        const results = await runSingleGaCampaignAsync(
+          workingPool, 
+          category, 
+          prioritizedAttrs, 
+          this.gaParams,
+          progressCallback
+        );
+        
         if (results.length > 0) {
           allBestSolutions.push(...results);
           const bestScore = results[0].optimizationScore;
@@ -522,6 +534,8 @@ class ModuleOptimizer {
             progressCallback(`Task ${i + 1}/${this.numCampaigns} completed. Highest score: ${bestScore.toFixed(2)}`);
           }
         }
+        
+        await yieldToEventLoop(); // Yield after each campaign
       } catch (error) {
         this.logger.error(`Error in campaign ${i + 1}: ${error.message}`);
       }
@@ -590,6 +604,195 @@ class ModuleOptimizer {
   printSolutionDetails(solution, rank) {
     // Solution details are displayed in the UI, no console output needed
   }
+}
+
+// Yield helper
+function yieldToEventLoop() {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
+// Modify runSingleGaCampaign to be async
+async function runSingleGaCampaignAsync(modules, category, prioritizedAttrs, gaParams, progressCallback = null) {
+  // Initialize population
+  function initializePopulation(pool, size) {
+    const population = [];
+    const seen = new Set();
+    if (pool.length < 4) return [];
+
+    const maxPossibleCombinations = factorial(pool.length) / (factorial(4) * factorial(pool.length - 4));
+    const targetSize = Math.min(size, maxPossibleCombinations);
+    if (targetSize === 0) return [];
+
+    while (population.length < targetSize) {
+      const selectedModules = shuffleArray([...pool]).slice(0, 4);
+      const solution = new ModuleSolution(selectedModules);
+      const comboId = solution.getCombinationId();
+      
+      if (!seen.has(comboId)) {
+        solution.optimizationScore = calculateFitness(solution.modules, category, prioritizedAttrs);
+        population.push(solution);
+        seen.add(comboId);
+      }
+    }
+    return population;
+  }
+
+  // Selection
+  function selection(population) {
+    const tournamentSize = gaParams.tournamentSize;
+    const tournament = shuffleArray([...population]).slice(0, tournamentSize);
+    return tournament.reduce((best, current) => 
+      current.optimizationScore > best.optimizationScore ? current : best
+    );
+  }
+
+  // Crossover
+  function crossover(p1, p2) {
+    if (Math.random() > gaParams.crossoverRate) {
+      return [deepCopy(p1), deepCopy(p2)];
+    }
+
+    const p1Ids = new Set(p1.modules.slice(0, 2).map(m => m.uuid));
+    const p2Ids = new Set(p2.modules.slice(0, 2).map(m => m.uuid));
+
+    const child1Mods = [
+      ...p1.modules.slice(0, 2),
+      ...p2.modules.filter(m => !p1Ids.has(m.uuid)).slice(0, 2)
+    ];
+    const child2Mods = [
+      ...p2.modules.slice(0, 2),
+      ...p1.modules.filter(m => !p2Ids.has(m.uuid)).slice(0, 2)
+    ];
+
+    return [
+      child1Mods.length === 4 ? new ModuleSolution(child1Mods) : deepCopy(p1),
+      child2Mods.length === 4 ? new ModuleSolution(child2Mods) : deepCopy(p2)
+    ];
+  }
+
+  // Mutation
+  function mutate(solution, pool) {
+    if (Math.random() > gaParams.mutationRate) return;
+    
+    const currentIds = new Set(solution.modules.map(m => m.uuid));
+    const candidates = pool.filter(m => !currentIds.has(m.uuid));
+    if (candidates.length === 0) return;
+
+    const indexToReplace = Math.floor(Math.random() * solution.modules.length);
+    solution.modules[indexToReplace] = candidates[Math.floor(Math.random() * candidates.length)];
+    solution.modules.sort((a, b) => a.uuid - b.uuid);
+  }
+
+  // Local search - optimized version
+  async function localSearch(solution, pool) {
+    let bestSolution = deepCopy(solution);
+    bestSolution.optimizationScore = calculateFitness(bestSolution.modules, category, prioritizedAttrs);
+
+    let improved = true;
+    let iterations = 0;
+    const maxIterations = 2; // Limit to prevent long blocks
+    
+    while (improved && iterations < maxIterations) {
+      improved = false;
+      iterations++;
+      
+      for (let i = 0; i < bestSolution.modules.length; i++) {
+        const currentModule = bestSolution.modules[i];
+        let bestReplacement = null;
+        let bestNewScore = bestSolution.optimizationScore;
+
+        // Limit search space
+        const topCandidates = pool
+          .filter(m => {
+            const otherIds = new Set(bestSolution.modules.filter((_, idx) => idx !== i).map(m => m.uuid));
+            return !otherIds.has(m.uuid);
+          })
+          .slice(0, 30); // Only check top 30 candidates
+
+        for (const newModule of topCandidates) {
+          const tempModules = [...bestSolution.modules];
+          tempModules[i] = newModule;
+          const newScore = calculateFitness(tempModules, category, prioritizedAttrs);
+
+          if (newScore > bestNewScore) {
+            bestNewScore = newScore;
+            bestReplacement = newModule;
+          }
+        }
+
+        if (bestReplacement) {
+          bestSolution.modules[i] = bestReplacement;
+          bestSolution.optimizationScore = bestNewScore;
+          bestSolution.modules.sort((a, b) => a.uuid - b.uuid);
+          improved = true;
+        }
+        
+        // Yield every few replacements
+        if (i % 2 === 0) {
+          await yieldToEventLoop();
+        }
+      }
+    }
+    return bestSolution;
+  }
+
+  // Main GA loop - now async
+  let population = initializePopulation(modules, gaParams.populationSize);
+  if (population.length === 0) return [];
+
+  for (let gen = 0; gen < gaParams.generations; gen++) {
+    population.sort((a, b) => b.optimizationScore - a.optimizationScore);
+    
+    const nextGen = [];
+    const eliteCount = Math.floor(gaParams.populationSize * gaParams.elitismRate);
+    nextGen.push(...population.slice(0, eliteCount).map(s => deepCopy(s)));
+
+    // Process in batches to yield
+    const batchSize = 20;
+    while (nextGen.length < gaParams.populationSize) {
+      const p1 = selection(population);
+      const p2 = selection(population);
+      const [c1, c2] = crossover(p1, p2);
+      mutate(c1, modules);
+      mutate(c2, modules);
+      nextGen.push(c1, c2);
+      
+      // Yield every batch
+      if (nextGen.length % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    // Calculate fitness in batches
+    for (let i = 0; i < nextGen.length; i++) {
+      nextGen[i].optimizationScore = calculateFitness(nextGen[i].modules, category, prioritizedAttrs);
+      if (i % 20 === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    nextGen.sort((a, b) => b.optimizationScore - a.optimizationScore);
+
+    // Local search in batches
+    const localSearchCount = Math.floor(gaParams.populationSize * gaParams.localSearchRate);
+    for (let i = 0; i < localSearchCount; i++) {
+      nextGen[i] = await localSearch(nextGen[i], modules);
+      if (i % 3 === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    population = nextGen;
+    
+    // Yield after each generation
+    await yieldToEventLoop();
+    
+    if (progressCallback && gen % 5 === 0) {
+      progressCallback(`Generation ${gen + 1}/${gaParams.generations}`);
+    }
+  }
+
+  return population.sort((a, b) => b.optimizationScore - a.optimizationScore);
 }
 
 module.exports = { ModuleOptimizer, ModuleSolution, calculateFitness };

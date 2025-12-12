@@ -7,7 +7,7 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "rebuild": "electron-rebuild",
-    "postinstall": "electron-rebuild",
+    "postinstall": "electron-builder install-app-deps",
     "build": "electron-builder --win",
     "build:nsis": "electron-builder --win --config.win.target=nsis",
     "build:portable": "electron-builder --win --config.win.target=portable",
@@ -74,7 +74,10 @@
         }
       ],
       "icon": "icon.ico",
-      "artifactName": "${productName}-${version}-Setup.${ext}"
+      "artifactName": "${productName}-${version}-Setup.${ext}",
+      "signingHashAlgorithms": ["sha256"],
+      "timeStampServer": "http://timestamp.digicert.com",
+      "publisherName": "Uzarak"
     },
     "electronLanguages": ["en", "es"],
     "nsis": {
