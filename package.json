@@ -1,6 +1,6 @@
 {
   "name": "bpsr-uza-modules",
-  "version": "0.1.2",
+  "version": "0.2.1",
   "description": "BPSR Uza Modules - Game module optimization tool",
   "main": "src/main.js",
   "scripts": {

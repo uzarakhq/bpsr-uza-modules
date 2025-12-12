@@ -198,13 +198,14 @@ app.on('activate', () => {
 
 // Get network interfaces
 ipcMain.handle('get-network-interfaces', async () => {
-  const interfaces = getNetworkInterfaces();
+  const interfaces = getNetworkInterfaces(true); // Include all interfaces (virtual/VPN included)
   return interfaces.map((iface, index) => ({
     index,
     name: iface.name,
     description: iface.description,
     friendlyName: iface.friendlyName,
     addresses: iface.addresses.map(a => a.addr),
+    isVirtual: iface.isVirtual || false,
   }));
 });
 

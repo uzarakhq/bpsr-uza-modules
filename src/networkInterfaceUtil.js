@@ -80,22 +80,94 @@ function isVirtualOrVPN(name, description) {
 function getFriendlyName(name, description) {
   const descLower = (description || '').toLowerCase();
   const nameLower = (name || '').toLowerCase();
+  const combined = `${descLower} ${nameLower}`;
   
   // Check description first (usually more descriptive)
-  if (descLower.includes('wi-fi') || descLower.includes('wifi') || descLower.includes('wireless') || descLower.includes('802.11')) {
-    return 'WiFi';
+  // Order matters - check more specific patterns first
+  
+  // Virtual/VPN interfaces (check before generic Ethernet)
+  if (descLower.includes('hyper-v') || descLower.includes('vethernet')) {
+    return 'Hyper-V';
   }
-  if (descLower.includes('ethernet') || descLower.includes('gigabit') || descLower.includes('fast ethernet')) {
-    return 'Ethernet';
+  if (descLower.includes('virtualbox') || descLower.includes('vmware')) {
+    return 'VirtualBox/VMware';
+  }
+  if (descLower.includes('hamachi')) {
+    return 'Hamachi VPN';
+  }
+  if (descLower.includes('zerotier')) {
+    return 'ZeroTier';
+  }
+  if (descLower.includes('tailscale')) {
+    return 'Tailscale';
+  }
+  if (descLower.includes('wireguard')) {
+    return 'WireGuard';
+  }
+  if (descLower.includes('openvpn')) {
+    return 'OpenVPN';
+  }
+  if (descLower.includes('tun') || descLower.includes('tap')) {
+    return 'TUN/TAP';
   }
   
-  // Check name patterns
+  // Loopback (check before generic patterns)
+  if (descLower.includes('loopback') || nameLower.startsWith('lo') && nameLower.length <= 3) {
+    return 'Loopback';
+  }
+  
+  // WiFi/Wireless
+  if (descLower.includes('wi-fi') || descLower.includes('wifi') || descLower.includes('wireless') || descLower.includes('802.11') || descLower.includes('wlan')) {
+    return 'WiFi';
+  }
+  
+  // Bluetooth
+  if (descLower.includes('bluetooth') || descLower.includes('pan')) {
+    return 'Bluetooth';
+  }
+  
+  // Ethernet (check last to avoid matching virtual adapters)
+  if (descLower.includes('ethernet') || descLower.includes('gigabit') || descLower.includes('fast ethernet') || descLower.includes('lan')) {
+    return 'Ethernet';
+  }
+  // Check name patterns (for cases where description wasn't helpful)
+  // Order matters - check more specific patterns first
+  if (nameLower.includes('vethernet') || nameLower.includes('hyper-v')) {
+    return 'Hyper-V';
+  }
+  if (nameLower.startsWith('lo') && nameLower.length <= 3) {
+    return 'Loopback';
+  }
   if (nameLower.includes('wifi') || nameLower.includes('wlan') || nameLower.includes('wireless')) {
     return 'WiFi';
+  }
+  if (nameLower.includes('bluetooth') || nameLower.includes('pan')) {
+    return 'Bluetooth';
+  }
+  if (nameLower.startsWith('tun') || nameLower.startsWith('tap')) {
+    return 'TUN/TAP';
   }
   if (nameLower.includes('ethernet') || nameLower.startsWith('eth') || 
       (nameLower.startsWith('en') && !nameLower.includes('wifi') && !nameLower.includes('wlan'))) {
     return 'Ethernet';
+  }
+  
+  // Try to extract a meaningful name from description
+  // Remove common prefixes/suffixes and clean up
+  if (description && description !== name) {
+    let cleanDesc = description
+      .replace(/^microsoft\s+/i, '')
+      .replace(/^realtek\s+/i, '')
+      .replace(/^intel\s+/i, '')
+      .replace(/^qualcomm\s+/i, '')
+      .replace(/^broadcom\s+/i, '')
+      .replace(/\s+adapter$/i, '')
+      .replace(/\s+network\s+adapter$/i, '')
+      .trim();
+    
+    if (cleanDesc && cleanDesc.length > 0 && cleanDesc.length < 50) {
+      return cleanDesc;
+    }
   }
   
   // Fallback to description if available, otherwise name
@@ -104,9 +176,10 @@ function getFriendlyName(name, description) {
 
 /**
  * Get all network interfaces using cap's device list for proper Windows support
+ * @param {boolean} includeVirtual - Whether to include virtual/VPN interfaces (default: true)
  * @returns {Array} List of network interface information
  */
-function getNetworkInterfaces() {
+function getNetworkInterfaces(includeVirtual = true) {
   const interfaces = [];
   
   try {
@@ -115,8 +188,8 @@ function getNetworkInterfaces() {
     const capDevices = Cap.deviceList();
     
     for (const device of capDevices) {
-      // Filter out virtual networks and VPNs
-      if (isVirtualOrVPN(device.name, device.description)) {
+      // Optionally filter out virtual networks and VPNs
+      if (!includeVirtual && isVirtualOrVPN(device.name, device.description)) {
         // Only log debug info in development mode
         if (logger.debug) {
           logger.debug(`Filtered out virtual/VPN interface: ${device.name} - ${device.description}`);
@@ -133,19 +206,22 @@ function getNetworkInterfaces() {
           internal: false,
         }));
 
-      // Only include interfaces with IPv4 addresses
-      if (ipv4Addresses.length > 0) {
+      // Include interfaces with IPv4 addresses, or all interfaces if includeVirtual is true
+      if (ipv4Addresses.length > 0 || includeVirtual) {
         const friendlyName = getFriendlyName(device.name, device.description);
+        const isVirtual = isVirtualOrVPN(device.name, device.description);
+        
         // Only log debug info in development mode
         if (logger.debug) {
-          logger.debug(`Including interface: ${device.name} - ${device.description} -> ${friendlyName}`);
+          logger.debug(`Including interface: ${device.name} - ${device.description} -> ${friendlyName}${isVirtual ? ' (Virtual/VPN)' : ''}`);
         }
         interfaces.push({
           name: device.name, // This is the proper device name for cap
           description: device.description || device.name,
           friendlyName: friendlyName,
-          addresses: ipv4Addresses,
+          addresses: ipv4Addresses.length > 0 ? ipv4Addresses : [],
           isUp: true,
+          isVirtual: isVirtual,
         });
       }
     }
@@ -159,8 +235,8 @@ function getNetworkInterfaces() {
       const netInterfaces = os.networkInterfaces();
       
       for (const [name, addresses] of Object.entries(netInterfaces)) {
-        // Filter out virtual networks and VPNs
-        if (isVirtualOrVPN(name, name)) {
+        // Optionally filter out virtual networks and VPNs
+        if (!includeVirtual && isVirtualOrVPN(name, name)) {
           // Only log debug info in development mode
           if (logger.debug) {
             logger.debug(`Filtered out virtual/VPN interface: ${name}`);
@@ -176,18 +252,21 @@ function getNetworkInterfaces() {
             internal: addr.internal,
           }));
 
-        if (ipv4Addresses.length > 0) {
+        if (ipv4Addresses.length > 0 || includeVirtual) {
           const friendlyName = getFriendlyName(name, name);
+          const isVirtual = isVirtualOrVPN(name, name);
+          
           // Only log debug info in development mode
           if (logger.debug) {
-            logger.debug(`Including interface: ${name} -> ${friendlyName}`);
+            logger.debug(`Including interface: ${name} -> ${friendlyName}${isVirtual ? ' (Virtual/VPN)' : ''}`);
           }
           interfaces.push({
             name: name,
             description: name,
             friendlyName: friendlyName,
-            addresses: ipv4Addresses,
+            addresses: ipv4Addresses.length > 0 ? ipv4Addresses : [],
             isUp: true,
+            isVirtual: isVirtual,
           });
         }
       }
@@ -196,9 +275,9 @@ function getNetworkInterfaces() {
     }
   }
 
-  logger.info(`Found ${interfaces.length} network interface(s) after filtering`);
+  logger.info(`Found ${interfaces.length} network interface(s)${includeVirtual ? ' (including virtual/VPN)' : ''}`);
   if (interfaces.length === 0) {
-    logger.warn('No network interfaces found. This might indicate overly aggressive filtering.');
+    logger.warn('No network interfaces found.');
   }
   
   return interfaces;
