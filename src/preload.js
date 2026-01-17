@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Npcap check
   checkNpcap: () => ipcRenderer.invoke('check-npcap'),
   
+  // Config
+  getConfigValue: (section, key, defaultValue) => ipcRenderer.invoke('get-config-value', section, key, defaultValue),
+  setConfigValue: (section, key, value) => ipcRenderer.invoke('set-config-value', section, key, value),
+  
   // Event listeners
   onDataCaptured: (callback) => {
     ipcRenderer.on('data-captured', callback);

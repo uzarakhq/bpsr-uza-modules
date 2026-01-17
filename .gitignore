@@ -48,3 +48,6 @@ certificate-password.txt
 *.pfx
 *.p12
 *.key
+
+config.ini
+config.json

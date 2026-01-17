@@ -1,6 +1,6 @@
 {
   "name": "bpsr-uza-modules",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "BPSR Uza Modules - Game module optimization tool",
   "main": "src/main.js",
   "scripts": {
@@ -44,6 +44,8 @@
       "Icons/**/*",
       "Attributes/**/*",
       "Modules/**/*",
+      "!**/node_modules/protobufjs/dist/**/*.map",
+      "!**/node_modules/**/*.md",
       "!**/node_modules/protobufjs/cli/**",
       "!**/node_modules/protobufjs/google/**",
       "!**/node_modules/protobufjs/scripts/**",
@@ -63,6 +65,7 @@
     "extraResources": [],
     "compression": "maximum",
     "win": {
+      "requestedExecutionLevel": "asInvoker",
       "target": [
         {
           "target": "nsis",
@@ -79,6 +82,8 @@
       "timeStampServer": "http://timestamp.digicert.com",
       "publisherName": "Uzarak"
     },
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
     "electronLanguages": ["en", "es"],
     "nsis": {
       "oneClick": false,

@@ -107,7 +107,11 @@ async function init() {
 
   // Load network interfaces
   networkInterfaces = await window.electronAPI.getNetworkInterfaces();
-  populateNetworkInterfaces();
+  
+  // Load saved NetworkCard index from config
+  const savedNetworkCardIndex = await window.electronAPI.getConfigValue('SetUp', 'NetworkCard', null);
+  
+  populateNetworkInterfaces(savedNetworkCardIndex);
 
   // Load all attributes
   allAttributes = await window.electronAPI.getAllAttributes();
@@ -151,7 +155,7 @@ function hideNpcapModal() {
 }
 
 // Populate network interfaces dropdown (optimized with DocumentFragment)
-function populateNetworkInterfaces() {
+function populateNetworkInterfaces(savedIndex = null) {
   elements.networkInterface.innerHTML = '';
   
   if (networkInterfaces.length === 0) {
@@ -162,29 +166,46 @@ function populateNetworkInterfaces() {
     return;
   }
   
-  // Find default (Ethernet) interface index
-  let defaultIndex = 0;
-  for (let i = 0; i < networkInterfaces.length; i++) {
-    const iface = networkInterfaces[i];
-    const name = (iface.name || '').toLowerCase();
-    const desc = (iface.description || '').toLowerCase();
-    
-    // Check if it's an Ethernet interface
-    const isEthernet = name.includes('ethernet') || 
-                      desc.includes('ethernet') ||
-                      name.startsWith('eth') ||
-                      (name.startsWith('en') && !name.includes('wifi') && !name.includes('wlan'));
-    
-    if (isEthernet) {
-      // Prefer interfaces with non-loopback IPv4 addresses
-      const hasValidAddress = iface.addresses && iface.addresses.some(addr => {
-        return addr && !addr.includes(':') && !addr.startsWith('127.');
-      });
+  // Determine which index to select
+  let selectedIndex = null;
+  
+  // If saved index is provided and valid, use it
+  if (savedIndex !== null && !isNaN(savedIndex)) {
+    const index = parseInt(savedIndex, 10);
+    if (index >= 0 && index < networkInterfaces.length) {
+      selectedIndex = index;
+    }
+  }
+  
+  // If no valid saved index, find default (Ethernet) interface index
+  if (selectedIndex === null) {
+    for (let i = 0; i < networkInterfaces.length; i++) {
+      const iface = networkInterfaces[i];
+      const name = (iface.name || '').toLowerCase();
+      const desc = (iface.description || '').toLowerCase();
       
-      if (hasValidAddress || (iface.addresses && iface.addresses.length > 0)) {
-        defaultIndex = i;
-        break;
+      // Check if it's an Ethernet interface
+      const isEthernet = name.includes('ethernet') || 
+                        desc.includes('ethernet') ||
+                        name.startsWith('eth') ||
+                        (name.startsWith('en') && !name.includes('wifi') && !name.includes('wlan'));
+      
+      if (isEthernet) {
+        // Prefer interfaces with non-loopback IPv4 addresses
+        const hasValidAddress = iface.addresses && iface.addresses.some(addr => {
+          return addr && !addr.includes(':') && !addr.startsWith('127.');
+        });
+        
+        if (hasValidAddress || (iface.addresses && iface.addresses.length > 0)) {
+          selectedIndex = i;
+          break;
+        }
       }
+    }
+    
+    // Fallback to first interface if no Ethernet found
+    if (selectedIndex === null) {
+      selectedIndex = 0;
     }
   }
   
@@ -201,7 +222,7 @@ function populateNetworkInterfaces() {
       ? iface.addresses.join(', ')
       : '';
     option.textContent = ipAddresses ? `${displayName} (${ipAddresses})` : displayName;
-    if (index === defaultIndex) {
+    if (index === selectedIndex) {
       option.selected = true;
     }
     fragment.appendChild(option);
@@ -376,6 +397,13 @@ function setupEventListeners() {
   elements.languageSelect.addEventListener('change', (e) => {
     currentLanguage = e.target.value;
     applyLanguage(currentLanguage);
+  });
+
+  // Network interface change - save to config
+  elements.networkInterface.addEventListener('change', async (e) => {
+    const selectedIndex = e.target.selectedIndex;
+    // Save the index to config
+    await window.electronAPI.setConfigValue('SetUp', 'NetworkCard', selectedIndex);
   });
 
   // Select all button

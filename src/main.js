@@ -10,6 +10,7 @@ const { setupLogging, getLogger } = require('./logger');
 const { getNetworkInterfaces } = require('./networkInterfaceUtil');
 const { StarResonanceMonitor } = require('./starResonanceMonitor');
 const { ModuleCategory, ALL_ATTRIBUTES } = require('./moduleTypes');
+const { initConfigHandler, getConfigValue, setConfigValue } = require('./configHandler');
 
 // Get app version from package.json
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -178,6 +179,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Initialize config handler with app instance
+  initConfigHandler(app);
   createMenu();
   createWindow();
 });
@@ -321,6 +324,32 @@ ipcMain.handle('check-npcap', async () => {
     // Npcap not available - this is OK, app can still work
     logger.info(`Npcap not available: ${err.message} - app will continue without packet capture`);
     return { available: false, error: err.message };
+  }
+});
+
+// Get config value
+ipcMain.handle('get-config-value', async (event, section, key, defaultValue = null) => {
+  try {
+    const value = getConfigValue(section, key, defaultValue);
+    // Convert string to number if it's a numeric value
+    if (value !== null && !isNaN(value) && value !== '') {
+      return parseInt(value, 10);
+    }
+    return value;
+  } catch (err) {
+    logger.error(`Failed to get config value: ${err.message}`);
+    return defaultValue;
+  }
+});
+
+// Set config value
+ipcMain.handle('set-config-value', async (event, section, key, value) => {
+  try {
+    const success = setConfigValue(section, key, value);
+    return { success };
+  } catch (err) {
+    logger.error(`Failed to set config value: ${err.message}`);
+    return { success: false, error: err.message };
   }
 });
 

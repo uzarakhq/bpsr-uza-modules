@@ -24,6 +24,56 @@ const { getLogger } = require('./logger');
 
 const logger = getLogger('ModuleOptimizer');
 
+// Fitness calculation cache - stores results for identical module combinations
+const fitnessCache = new Map();
+const MAX_CACHE_SIZE = 10000; // Limit cache size to prevent memory issues
+
+// Object pool for ModuleSolution instances
+const solutionPool = [];
+const MAX_POOL_SIZE = 500;
+
+/**
+ * Get a ModuleSolution from pool or create new one
+ */
+function getSolution(modules) {
+  const sol = solutionPool.pop() || new ModuleSolution([]);
+  sol.modules = [...modules].sort((a, b) => a.uuid - b.uuid);
+  sol.attrBreakdown = {};
+  sol.score = 0;
+  sol.optimizationScore = 0;
+  return sol;
+}
+
+/**
+ * Release a ModuleSolution back to the pool
+ */
+function releaseSolution(sol) {
+  if (solutionPool.length < MAX_POOL_SIZE) {
+    // Clear references to allow garbage collection
+    sol.modules = [];
+    sol.attrBreakdown = {};
+    sol.score = 0;
+    sol.optimizationScore = 0;
+    solutionPool.push(sol);
+  }
+}
+
+/**
+ * Clear fitness cache if it gets too large
+ */
+function clearFitnessCacheIfNeeded() {
+  if (fitnessCache.size > MAX_CACHE_SIZE) {
+    // Clear oldest 20% of entries (simple FIFO-like behavior)
+    const entriesToDelete = Math.floor(MAX_CACHE_SIZE * 0.2);
+    let deleted = 0;
+    for (const key of fitnessCache.keys()) {
+      if (deleted >= entriesToDelete) break;
+      fitnessCache.delete(key);
+      deleted++;
+    }
+  }
+}
+
 /**
  * Module Solution class - represents a combination of modules
  */
@@ -42,9 +92,19 @@ class ModuleSolution {
 
 /**
  * Calculate fitness score for a module combination
+ * Uses caching to avoid recalculating identical combinations
  */
 function calculateFitness(modules, category, prioritizedAttrs = null) {
   if (!modules || new Set(modules.map(m => m.uuid)).size < 4) return 0;
+
+  // Create cache key from module UUIDs, category, and prioritized attributes
+  const moduleIds = modules.map(m => m.uuid).sort().join(',');
+  const cacheKey = `${moduleIds}-${category}-${prioritizedAttrs?.join(',') || 'none'}`;
+  
+  // Check cache first
+  if (fitnessCache.has(cacheKey)) {
+    return fitnessCache.get(cacheKey);
+  }
 
   const attrBreakdown = {};
   for (const module of modules) {
@@ -125,7 +185,13 @@ function calculateFitness(modules, category, prioritizedAttrs = null) {
   // Small bonus for total attribute value
   score += Object.values(attrBreakdown).reduce((a, b) => a + b, 0) * 0.1;
 
-  return Math.max(0, score);
+  const finalScore = Math.max(0, score);
+  
+  // Cache the result
+  clearFitnessCacheIfNeeded();
+  fitnessCache.set(cacheKey, finalScore);
+  
+  return finalScore;
 }
 
 /**
@@ -295,7 +361,7 @@ function shuffleArray(arr) {
 }
 
 function deepCopy(solution) {
-  const copy = new ModuleSolution([...solution.modules]);
+  const copy = getSolution(solution.modules);
   copy.attrBreakdown = { ...solution.attrBreakdown };
   copy.score = solution.score;
   copy.optimizationScore = solution.optimizationScore;
@@ -498,12 +564,17 @@ class ModuleOptimizer {
       return [];
     }
 
-    const highQualityModules = candidateModules.filter(m => 
-      m.parts.reduce((sum, p) => sum + p.value, 0) >= this.qualityThreshold
-    );
-    const lowQualityModules = candidateModules.filter(m =>
-      m.parts.reduce((sum, p) => sum + p.value, 0) < this.qualityThreshold
-    );
+    const modulesWithTotals = candidateModules.map(m => ({
+      module: m,
+      totalValue: m.parts.reduce((sum, p) => sum + p.value, 0)
+    }));
+    const highQualityModules = modulesWithTotals
+      .filter(m => m.totalValue >= this.qualityThreshold)
+      .map(m => m.module);
+
+    // const lowQualityModules = candidateModules.filter(m =>
+    //   m.parts.reduce((sum, p) => sum + p.value, 0) < this.qualityThreshold
+    // );
 
     // Module pooling completed
 
@@ -625,13 +696,16 @@ async function runSingleGaCampaignAsync(modules, category, prioritizedAttrs, gaP
 
     while (population.length < targetSize) {
       const selectedModules = shuffleArray([...pool]).slice(0, 4);
-      const solution = new ModuleSolution(selectedModules);
+      const solution = getSolution(selectedModules);
       const comboId = solution.getCombinationId();
       
       if (!seen.has(comboId)) {
         solution.optimizationScore = calculateFitness(solution.modules, category, prioritizedAttrs);
         population.push(solution);
         seen.add(comboId);
+      } else {
+        // Release unused solution back to pool
+        releaseSolution(solution);
       }
     }
     return population;
@@ -665,8 +739,8 @@ async function runSingleGaCampaignAsync(modules, category, prioritizedAttrs, gaP
     ];
 
     return [
-      child1Mods.length === 4 ? new ModuleSolution(child1Mods) : deepCopy(p1),
-      child2Mods.length === 4 ? new ModuleSolution(child2Mods) : deepCopy(p2)
+      child1Mods.length === 4 ? getSolution(child1Mods) : deepCopy(p1),
+      child2Mods.length === 4 ? getSolution(child2Mods) : deepCopy(p2)
     ];
   }
 
@@ -685,6 +759,7 @@ async function runSingleGaCampaignAsync(modules, category, prioritizedAttrs, gaP
 
   // Local search - optimized version
   async function localSearch(solution, pool) {
+    // Use deepCopy which now uses object pool
     let bestSolution = deepCopy(solution);
     bestSolution.optimizationScore = calculateFitness(bestSolution.modules, category, prioritizedAttrs);
 
@@ -696,18 +771,30 @@ async function runSingleGaCampaignAsync(modules, category, prioritizedAttrs, gaP
       improved = false;
       iterations++;
       
+      // Pre-compute other module IDs once (optimize Set operations)
+      const allCurrentIds = new Set(bestSolution.modules.map(m => m.uuid));
+      
       for (let i = 0; i < bestSolution.modules.length; i++) {
         const currentModule = bestSolution.modules[i];
         let bestReplacement = null;
         let bestNewScore = bestSolution.optimizationScore;
 
-        // Limit search space
-        const topCandidates = pool
-          .filter(m => {
-            const otherIds = new Set(bestSolution.modules.filter((_, idx) => idx !== i).map(m => m.uuid));
-            return !otherIds.has(m.uuid);
-          })
-          .slice(0, 30); // Only check top 30 candidates
+        // Optimize: Create Set once outside filter loop
+        const otherIds = new Set();
+        for (let idx = 0; idx < bestSolution.modules.length; idx++) {
+          if (idx !== i) {
+            otherIds.add(bestSolution.modules[idx].uuid);
+          }
+        }
+
+        // Limit search space - filter efficiently
+        const topCandidates = [];
+        for (const m of pool) {
+          if (!otherIds.has(m.uuid)) {
+            topCandidates.push(m);
+            if (topCandidates.length >= 30) break; // Only check top 30 candidates
+          }
+        }
 
         for (const newModule of topCandidates) {
           const tempModules = [...bestSolution.modules];
